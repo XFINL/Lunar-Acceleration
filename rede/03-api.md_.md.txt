@@ -1,0 +1,1328 @@
+03-api.md
+
+```markdown
+# CDN 加速控制面板 — API 设计
+
+> 版本：v0.1
+> 风格：RESTful
+> 传输：HTTPS + JSON
+> 认证：JWT（用户端/管理员端）+ Token（节点通信）
+> 文档：Swagger 自动生成
+
+---
+
+## 1. 通用约定
+
+### 1.1 基础路径
+
+| 前缀 | 用途 | 认证 |
+|------|------|------|
+| `/api/v1/auth` | 认证 | 无 / JWT |
+| `/api/v1/user` | 用户端 | JWT |
+| `/api/v1/admin` | 管理员端 | JWT + RBAC |
+| `/api/v1/node` | 节点通信 | Node Token |
+| `/api/v1/webhook` | 回调 | 签名校验 |
+| `/api/v1/openapi` | 对外API | AccessKey + SecretKey |
+
+### 1.2 请求规范
+
+**Header：**
+```
+
+Authorization: Bearer <jwt_token>
+Content-Type: application/json
+Accept-Language: zh-TW | en | jp | de
+X-Request-Id: <uuid>          # 可选，链路追踪
+
+```
+**分页参数：**
+```
+
+?page=1&pageSize=20&sort=created_at&order=desc
+
+```
+**筛选参数：**
+```
+
+?keyword=xxx&status=1&startTime=2025-01-01&endTime=2025-01-31
+
+```
+### 1.3 响应格式
+
+**成功：**
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": { ... },
+  "requestId": "uuid"
+}
+```
+
+分页：
+
+```json
+{
+  "code": 0,
+  "message": "success",
+  "data": {
+    "list": [ ... ],
+    "pagination": {
+      "page": 1,
+      "pageSize": 20,
+      "total": 100,
+      "totalPages": 5
+    }
+  },
+  "requestId": "uuid"
+}
+```
+
+错误：
+
+```json
+{
+  "code": 40001,
+  "message": "参数错误",
+  "errors": [
+    { "field": "domain", "message": "域名格式不正确" }
+  ],
+  "requestId": "uuid"
+}
+```
+
+1.4 错误码规范
+
+区间 含义
+0 成功
+40000-40099 参数错误
+40100-40199 认证错误
+40300-40399 权限错误
+40400-40499 资源不存在
+40900-40999 资源冲突
+42900-42999 限流
+50000-50099 服务器错误
+60000-60099 业务错误
+70000-70099 第三方错误
+
+常用错误码：
+
+code 说明
+0 成功
+40001 参数校验失败
+40002 域名格式错误
+40101 未登录
+40102 Token 过期
+40103 Token 无效
+40301 无权限
+40302 套餐不支持该功能
+40303 配额已用完
+40401 域名不存在
+40402 节点不存在
+40901 域名已存在
+42901 请求过于频繁
+50001 服务器内部错误
+60001 域名审核中
+60002 套餐已过期
+70001 厂商API调用失败
+70002 节点通信失败
+
+1.5 时间格式
+
+· 请求/响应统一 ISO 8601：2025-01-01T12:00:00Z
+· 数据库存 UTC，展示层按用户时区转换
+
+1.6 多语言
+
+· Accept-Language 决定响应 message 语言
+· 错误码固定，message 多语言映射
+· 支持：zh-TW（默认）、en、jp、de
+
+---
+
+2. 权限模型（RBAC）
+
+2.1 权限点命名
+
+格式：<resource>:<action>
+
+resource：
+
+```
+domain, cache, origin, cert, purge, waf, statistics, log,
+node, vendor, schedule, user, package, order, ticket,
+notice, site_config, system_config, audit, report
+```
+
+action：
+
+```
+create, read, update, delete, audit, deploy, export
+```
+
+2.2 权限点清单
+
+域名
+
+```
+domain:create  domain:read  domain:update  domain:delete  domain:audit
+```
+
+缓存
+
+```
+cache:create  cache:read  cache:update  cache:delete
+```
+
+回源
+
+```
+origin:create  origin:read  origin:update  origin:delete
+```
+
+证书
+
+```
+cert:create  cert:read  cert:update  cert:delete
+```
+
+刷新预热
+
+```
+purge:create  purge:read
+```
+
+WAF
+
+```
+waf:create  waf:read  waf:update  waf:delete
+```
+
+统计
+
+```
+statistics:read  statistics:export
+```
+
+日志
+
+```
+log:read  log:export
+```
+
+节点
+
+```
+node:create  node:read  node:update  node:delete  node:deploy
+```
+
+厂商
+
+```
+vendor:create  vendor:read  vendor:update  vendor:delete
+```
+
+调度
+
+```
+schedule:create  schedule:read  schedule:update  schedule:delete
+```
+
+用户
+
+```
+user:create  user:read  user:update  user:delete
+```
+
+套餐
+
+```
+package:create  package:read  package:update  package:delete
+```
+
+订单
+
+```
+order:read  order:update  order:refund
+```
+
+工单
+
+```
+ticket:read  ticket:update  ticket:assign  ticket:close
+```
+
+公告
+
+```
+notice:create  notice:read  notice:update  notice:delete
+```
+
+网站配置
+
+```
+site_config:read  site_config:update
+```
+
+系统配置
+
+```
+system_config:read  system_config:update
+```
+
+审计
+
+```
+audit:read  audit:export
+```
+
+报表
+
+```
+report:read  report:export
+```
+
+2.3 角色默认权限
+
+角色 权限
+超级管理员 全部
+管理员 除 node:deploy、system_config:update、vendor:delete 外全部
+运维 node:、vendor:read、schedule:、statistics:read、log:read
+用户 自己资源的所有权限（domain/cache/origin/cert/purge/waf/statistics/log 的 CRUD）
+子用户 由主用户分配
+
+2.4 数据范围
+
+· all：全部数据（超管、管理员）
+· group：本组数据（运维看自己负责的节点组）
+· self：自己的数据（用户只看自己的域名）
+
+---
+
+3. 认证接口
+
+3.1 登录
+
+```
+POST /api/v1/auth/login
+```
+
+请求：
+
+```json
+{
+  "username": "admin",
+  "password": "xxxxxx",
+  "captcha": "abcd",
+  "captchaId": "uuid",
+  "remember": true
+}
+```
+
+响应：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "eyJ...",
+    "expiresIn": 7200,
+    "user": {
+      "id": 1,
+      "username": "admin",
+      "nickname": "管理员",
+      "avatar": "/uploads/avatar.png",
+      "roleType": 3,
+      "permissions": ["domain:create", "..."]
+    }
+  }
+}
+```
+
+3.2 注册
+
+```
+POST /api/v1/auth/register
+```
+
+请求：
+
+```json
+{
+  "username": "user1",
+  "email": "user@example.com",
+  "password": "xxxxxx",
+  "inviteCode": "ABC123",
+  "captcha": "abcd",
+  "captchaId": "uuid"
+}
+```
+
+3.3 登出
+
+```
+POST /api/v1/auth/logout
+```
+
+3.4 刷新 Token
+
+```
+POST /api/v1/auth/refresh
+```
+
+请求：
+
+```json
+{ "refreshToken": "eyJ..." }
+```
+
+3.5 忘记密码
+
+```
+POST /api/v1/auth/forgot-password
+```
+
+请求：
+
+```json
+{ "email": "user@example.com" }
+```
+
+3.6 重置密码
+
+```
+POST /api/v1/auth/reset-password
+```
+
+请求：
+
+```json
+{
+  "token": "xxxxxx",
+  "password": "newpass"
+}
+```
+
+3.7 获取验证码
+
+```
+GET /api/v1/auth/captcha
+```
+
+响应：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "captchaId": "uuid",
+    "image": "data:image/png;base64,..."
+  }
+}
+```
+
+3.8 2FA
+
+```
+POST /api/v1/auth/2fa/enable      启用
+POST /api/v1/auth/2fa/verify      验证
+POST /api/v1/auth/2fa/disable     禁用
+```
+
+3.9 第三方登录
+
+```
+GET  /api/v1/auth/oauth/:provider         跳转授权
+GET  /api/v1/auth/oauth/:provider/callback 回调
+```
+
+provider：wechat / qq / github / google
+
+---
+
+4. 用户端接口
+
+4.1 个人中心
+
+```
+GET    /api/v1/user/profile              获取资料
+PUT    /api/v1/user/profile              更新资料
+PUT    /api/v1/user/password             修改密码
+POST   /api/v1/user/avatar               上传头像
+GET    /api/v1/user/login-logs           登录记录
+```
+
+4.2 API 密钥
+
+```
+GET    /api/v1/user/api-keys             列表
+POST   /api/v1/user/api-keys             创建
+DELETE /api/v1/user/api-keys/:id         删除
+PUT    /api/v1/user/api-keys/:id         更新
+```
+
+4.3 仪表盘
+
+```
+GET    /api/v1/user/dashboard            概览数据
+```
+
+响应：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "traffic": { "today": 1073741824, "month": 32212254720 },
+    "bandwidth": { "current": 102400, "peak": 512000 },
+    "requests": { "today": 1234567, "month": 34567890 },
+    "hitRate": 92.5,
+    "domainCount": 5,
+    "package": {
+      "name": "专业版",
+      "trafficQuota": 1099511627776,
+      "trafficUsed": 32212254720,
+      "expireAt": "2025-12-31T23:59:59Z"
+    },
+    "balance": 100.00,
+    "alarms": []
+  }
+}
+```
+
+4.4 域名管理
+
+```
+GET    /api/v1/user/domains               列表
+POST   /api/v1/user/domains               添加
+GET    /api/v1/user/domains/:id           详情
+PUT    /api/v1/user/domains/:id           更新
+DELETE /api/v1/user/domains/:id           删除
+POST   /api/v1/user/domains/:id/check     检测CNAME
+POST   /api/v1/user/domains/batch         批量操作
+```
+
+添加域名请求：
+
+```json
+{
+  "domain": "cdn.example.com",
+  "businessType": "网站",
+  "originGroup": {
+    "name": "默认源站",
+    "origins": [
+      { "address": "1.1.1.1", "port": 80, "weight": 1, "protocol": "http" }
+    ],
+    "lbPolicy": 1
+  },
+  "remark": "测试域名"
+}
+```
+
+注意：accessType 由套餐自动决定，用户不传。
+
+4.5 域名配置
+
+```
+GET    /api/v1/user/domains/:id/config    获取配置
+PUT    /api/v1/user/domains/:id/config    更新配置
+```
+
+4.6 缓存规则
+
+```
+GET    /api/v1/user/domains/:id/cache-rules           列表
+POST   /api/v1/user/domains/:id/cache-rules           创建
+PUT    /api/v1/user/domains/:id/cache-rules/:ruleId   更新
+DELETE /api/v1/user/domains/:id/cache-rules/:ruleId   删除
+PUT    /api/v1/user/domains/:id/cache-rules/sort      排序
+```
+
+4.7 源站
+
+```
+GET    /api/v1/user/domains/:id/origins               列表
+POST   /api/v1/user/domains/:id/origins               创建
+PUT    /api/v1/user/domains/:id/origins/:originId     更新
+DELETE /api/v1/user/domains/:id/origins/:originId     删除
+POST   /api/v1/user/domains/:id/origins/health-check  健康检查
+```
+
+4.8 证书
+
+```
+GET    /api/v1/user/certificates              列表
+POST   /api/v1/user/certificates              上传
+POST   /api/v1/user/certificates/apply        自动申请
+GET    /api/v1/user/certificates/:id          详情
+DELETE /api/v1/user/certificates/:id          删除
+POST   /api/v1/user/certificates/:id/renew    续期
+POST   /api/v1/user/domains/:id/cert         绑定证书
+```
+
+4.9 刷新预热
+
+```
+GET    /api/v1/user/purge/tasks           任务列表
+POST   /api/v1/user/purge                 提交刷新
+GET    /api/v1/user/purge/tasks/:id       任务详情
+GET    /api/v1/user/purge/tasks/:id/records 任务明细
+```
+
+提交刷新：
+
+```json
+{
+  "domainId": 1,
+  "type": 1,
+  "targets": ["https://cdn.example.com/a.jpg", "..."]
+}
+```
+
+type：1 URL刷新 / 2 目录刷新 / 3 URL预热 / 4 标签刷新
+
+4.10 访问控制
+
+```
+GET    /api/v1/user/domains/:id/access-control    获取
+PUT    /api/v1/user/domains/:id/access-control    更新
+```
+
+4.11 WAF
+
+```
+GET    /api/v1/user/domains/:id/waf-rules            列表
+POST   /api/v1/user/domains/:id/waf-rules            创建
+PUT    /api/v1/user/domains/:id/waf-rules/:ruleId    更新
+DELETE /api/v1/user/domains/:id/waf-rules/:ruleId    删除
+PUT    /api/v1/user/domains/:id/waf-rules/sort       排序
+GET    /api/v1/user/domains/:id/waf-logs             拦截日志
+GET    /api/v1/user/waf/default-rules                默认规则库
+```
+
+4.12 统计报表
+
+```
+GET    /api/v1/user/statistics/traffic           流量
+GET    /api/v1/user/statistics/bandwidth         带宽
+GET    /api/v1/user/statistics/requests          请求数
+GET    /api/v1/user/statistics/hitrate           命中率
+GET    /api/v1/user/statistics/region            地域分布
+GET    /api/v1/user/statistics/isp               运营商分布
+GET    /api/v1/user/statistics/status-code       状态码
+GET    /api/v1/user/statistics/top-url           TOP URL
+GET    /api/v1/user/statistics/top-ip            TOP IP
+GET    /api/v1/user/statistics/export            导出
+```
+
+通用查询参数：
+
+```
+?domainId=1&startTime=2025-01-01T00:00:00Z&endTime=2025-01-31T23:59:59Z&granularity=hour|day
+```
+
+4.13 日志
+
+```
+GET    /api/v1/user/logs/access           访问日志
+GET    /api/v1/user/logs/access/export    导出
+GET    /api/v1/user/logs/delivery         投递配置
+PUT    /api/v1/user/logs/delivery         更新投递配置
+WS     /api/v1/user/logs/realtime         实时日志
+```
+
+WebSocket 实时日志：
+
+· 连接：wss://panel/api/v1/user/logs/realtime?token=xxx
+· 订阅：{ "action": "subscribe", "domainId": 1, "filters": { "statusCode": [404, 500] } }
+· 推送：{ "type": "log", "data": { ... } }
+· 套餐限制：feature_flags.realtime_log = true 才可用
+
+4.14 套餐与订单
+
+```
+GET    /api/v1/user/packages              套餐列表
+GET    /api/v1/user/packages/:id          套餐详情
+GET    /api/v1/user/my-package            我的套餐
+GET    /api/v1/user/orders                订单列表
+POST   /api/v1/user/orders                创建订单
+GET    /api/v1/user/orders/:id            订单详情
+POST   /api/v1/user/orders/:id/pay        发起支付（占位）
+POST   /api/v1/user/orders/:id/cancel     取消订单
+```
+
+4.15 工单
+
+```
+GET    /api/v1/user/tickets               列表
+POST   /api/v1/user/tickets               创建
+GET    /api/v1/user/tickets/:id           详情
+POST   /api/v1/user/tickets/:id/reply     回复
+POST   /api/v1/user/tickets/:id/close     关闭
+```
+
+4.16 公告
+
+```
+GET    /api/v1/user/notices               列表
+GET    /api/v1/user/notices/:id           详情
+GET    /api/v1/user/notices/unread-count  未读数
+POST   /api/v1/user/notices/:id/read      标记已读
+```
+
+4.17 网站配置（公开）
+
+```
+GET    /api/v1/user/site-config/:group    获取公开配置
+```
+
+group：basic / seo / theme / nav / home / auth / agreement / i18n / maintenance
+
+4.18 子用户（可选）
+
+```
+GET    /api/v1/user/sub-users             列表
+POST   /api/v1/user/sub-users             创建
+PUT    /api/v1/user/sub-users/:id         更新
+DELETE /api/v1/user/sub-users/:id         删除
+PUT    /api/v1/user/sub-users/:id/perms   分配权限
+```
+
+---
+
+5. 管理员端接口
+
+5.1 仪表盘
+
+```
+GET    /api/v1/admin/dashboard            平台概览
+```
+
+响应：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "traffic": { "today": 107374182400, "month": 3221225472000 },
+    "bandwidth": { "current": 10485760, "peak": 52428800 },
+    "users": { "total": 12345, "today": 56, "active": 8901 },
+    "domains": { "total": 45678, "today": 123 },
+    "nodes": { "total": 50, "online": 48, "offline": 2 },
+    "revenue": { "today": 1234.56, "month": 34567.89 },
+    "pending": { "domains": 5, "tickets": 3 },
+    "alarms": []
+  }
+}
+```
+
+5.2 用户管理
+
+```
+GET    /api/v1/admin/users                列表
+POST   /api/v1/admin/users                创建
+GET    /api/v1/admin/users/:id            详情
+PUT    /api/v1/admin/users/:id            更新
+DELETE /api/v1/admin/users/:id            删除
+POST   /api/v1/admin/users/:id/ban        封禁
+POST   /api/v1/admin/users/:id/unban      解封
+POST   /api/v1/admin/users/:id/reset-password  重置密码
+POST   /api/v1/admin/users/:id/balance    调整余额
+POST   /api/v1/admin/users/:id/package    分配套餐
+GET    /api/v1/admin/users/:id/domains    用户域名
+GET    /api/v1/admin/users/:id/orders     用户订单
+GET    /api/v1/admin/users/:id/login-logs 登录记录
+```
+
+5.3 套餐管理
+
+```
+GET    /api/v1/admin/packages             列表
+POST   /api/v1/admin/packages             创建
+GET    /api/v1/admin/packages/:id         详情
+PUT    /api/v1/admin/packages/:id         更新
+DELETE /api/v1/admin/packages/:id         删除
+PUT    /api/v1/admin/packages/:id/status  上下架
+```
+
+5.4 订单管理
+
+```
+GET    /api/v1/admin/orders               列表
+GET    /api/v1/admin/orders/:id           详情
+POST   /api/v1/admin/orders/:id/refund    退款
+GET    /api/v1/admin/transactions         资金流水
+```
+
+5.5 域名审核
+
+```
+GET    /api/v1/admin/domains              全部域名
+GET    /api/v1/admin/domains/audit        待审核列表
+POST   /api/v1/admin/domains/:id/approve  通过
+POST   /api/v1/admin/domains/:id/reject   拒绝
+POST   /api/v1/admin/domains/:id/offline  强制下线
+```
+
+5.6 节点管理
+
+```
+GET    /api/v1/admin/nodes                列表
+POST   /api/v1/admin/nodes                创建
+GET    /api/v1/admin/nodes/:id            详情
+PUT    /api/v1/admin/nodes/:id            更新
+DELETE /api/v1/admin/nodes/:id            删除
+POST   /api/v1/admin/nodes/:id/deploy     生成部署脚本
+POST   /api/v1/admin/nodes/:id/online     上线
+POST   /api/v1/admin/nodes/:id/offline    下线
+POST   /api/v1/admin/nodes/:id/maintain   维护模式
+POST   /api/v1/admin/nodes/:id/reload     重载配置
+POST   /api/v1/admin/nodes/:id/upgrade    升级
+GET    /api/v1/admin/nodes/:id/metrics    监控数据
+GET    /api/v1/admin/nodes/:id/config     配置快照
+GET    /api/v1/admin/nodes/:id/logs       部署日志
+GET    /api/v1/admin/nodes/:id/health     健康检查
+```
+
+创建节点：
+
+```json
+{
+  "name": "香港节点-01",
+  "ip": "1.1.1.1",
+  "port": 443,
+  "region": "HK",
+  "isp": "HKBN",
+  "nodeGroupId": 1,
+  "weight": 1,
+  "bandwidthMbps": 1000
+}
+```
+
+生成部署脚本响应：
+
+```json
+{
+  "code": 0,
+  "data": {
+    "nodeId": 1,
+    "token": "xxxxxx",
+    "script": "curl -fsSL https://panel/install.sh | bash -s -- --node-id=1 --token=xxxxxx --server=https://panel"
+  }
+}
+```
+
+5.7 节点组
+
+```
+GET    /api/v1/admin/node-groups          列表
+POST   /api/v1/admin/node-groups          创建
+PUT    /api/v1/admin/node-groups/:id      更新
+DELETE /api/v1/admin/node-groups/:id      删除
+```
+
+5.8 厂商管理
+
+```
+GET    /api/v1/admin/vendors              厂商列表
+POST   /api/v1/admin/vendors              创建
+PUT    /api/v1/admin/vendors/:id          更新
+DELETE /api/v1/admin/vendors/:id          删除
+GET    /api/v1/admin/vendor-accounts      账号列表
+POST   /api/v1/admin/vendor-accounts      创建
+PUT    /api/v1/admin/vendor-accounts/:id  更新
+DELETE /api/v1/admin/vendor-accounts/:id  删除
+POST   /api/v1/admin/vendor-accounts/:id/test   测试连通
+POST   /api/v1/admin/vendor-accounts/:id/sync   同步资源
+GET    /api/v1/admin/vendor-accounts/:id/logs   同步日志
+```
+
+5.9 调度中心
+
+```
+GET    /api/v1/admin/schedule/policies            策略列表
+POST   /api/v1/admin/schedule/policies            创建
+PUT    /api/v1/admin/schedule/policies/:id        更新
+DELETE /api/v1/admin/schedule/policies/:id        删除
+GET    /api/v1/admin/schedule/loadbalance         负载均衡规则
+POST   /api/v1/admin/schedule/loadbalance         创建
+PUT    /api/v1/admin/schedule/loadbalance/:id     更新
+GET    /api/v1/admin/schedule/failover            故障转移规则
+POST   /api/v1/admin/schedule/failover            创建
+PUT    /api/v1/admin/schedule/failover/:id        更新
+GET    /api/v1/admin/schedule/dns                 DNS记录
+```
+
+5.10 WAF 默认规则
+
+```
+GET    /api/v1/admin/waf/default-rules            列表
+POST   /api/v1/admin/waf/default-rules            创建
+PUT    /api/v1/admin/waf/default-rules/:id        更新
+DELETE /api/v1/admin/waf/default-rules/:id        删除
+POST   /api/v1/admin/waf/default-rules/import     导入规则库
+GET    /api/v1/admin/waf/logs                     全局拦截日志
+```
+
+5.11 网站配置
+
+```
+GET    /api/v1/admin/site-config/:group           获取配置
+PUT    /api/v1/admin/site-config/:group           更新配置
+POST   /api/v1/admin/site-config/upload           上传文件（Logo等）
+POST   /api/v1/admin/site-config/test-email       测试邮件
+POST   /api/v1/admin/site-config/test-sms         测试短信
+```
+
+group：basic / seo / theme / nav / home / auth / email / sms / oauth / payment / service / notice / i18n / agreement / maintenance / api / security / analytics
+
+5.12 系统配置
+
+```
+GET    /api/v1/admin/system-config/:group         获取配置
+PUT    /api/v1/admin/system-config/:group         更新配置
+```
+
+group：cache / limit / queue / log / alarm / feature
+
+5.13 告警
+
+```
+GET    /api/v1/admin/alarm-rules          规则列表
+POST   /api/v1/admin/alarm-rules          创建
+PUT    /api/v1/admin/alarm-rules/:id      更新
+DELETE /api/v1/admin/alarm-rules/:id      删除
+GET    /api/v1/admin/alarms               告警记录
+POST   /api/v1/admin/alarms/:id/resolve   标记处理
+```
+
+5.14 工单管理
+
+```
+GET    /api/v1/admin/tickets              列表
+GET    /api/v1/admin/tickets/:id          详情
+POST   /api/v1/admin/tickets/:id/reply    回复
+PUT    /api/v1/admin/tickets/:id/assign   分配
+PUT    /api/v1/admin/tickets/:id/close    关闭
+```
+
+5.15 公告管理
+
+```
+GET    /api/v1/admin/notices              列表
+POST   /api/v1/admin/notices              创建
+PUT    /api/v1/admin/notices/:id          更新
+DELETE /api/v1/admin/notices/:id          删除
+```
+
+5.16 帮助文档
+
+```
+GET    /api/v1/admin/help-docs            列表
+POST   /api/v1/admin/help-docs            创建
+PUT    /api/v1/admin/help-docs/:id        更新
+DELETE /api/v1/admin/help-docs/:id        删除
+GET    /api/v1/admin/help-categories      分类
+POST   /api/v1/admin/help-categories      创建分类
+```
+
+5.17 审计
+
+```
+GET    /api/v1/admin/audit-logs           操作日志
+GET    /api/v1/admin/audit-logs/export    导出
+GET    /api/v1/admin/login-logs           登录日志
+GET    /api/v1/admin/api-logs             API调用日志
+```
+
+5.18 平台报表
+
+```
+GET    /api/v1/admin/reports/revenue      收入报表
+GET    /api/v1/admin/reports/cost         成本报表
+GET    /api/v1/admin/reports/user-behavior 用户行为
+GET    /api/v1/admin/reports/node-cost    节点成本
+GET    /api/v1/admin/reports/export       导出
+```
+
+5.19 角色权限管理
+
+```
+GET    /api/v1/admin/roles                角色列表
+POST   /api/v1/admin/roles                创建
+PUT    /api/v1/admin/roles/:id            更新
+DELETE /api/v1/admin/roles/:id            删除
+GET    /api/v1/admin/permissions          权限点列表
+PUT    /api/v1/admin/roles/:id/perms      分配权限
+```
+
+---
+
+6. 节点通信接口
+
+节点 ↔ 控制端，HTTP + Token
+节点接收端口默认 443（HTTPS）
+
+6.1 节点 → 控制端
+
+心跳：
+
+```
+POST /api/v1/node/heartbeat
+Header: X-Node-Id: 1
+        X-Node-Token: xxxxxx
+        X-Timestamp: 1704067200
+        X-Signature: hmac_sha256(body + timestamp, token)
+
+Body:
+{
+  "nodeId": 1,
+  "version": "1.21.4.1",
+  "uptime": 86400,
+  "load": { "cpu": 12.5, "mem": 45.2, "disk": 30.1 },
+  "connections": 1234,
+  "qps": 567
+}
+```
+
+上报监控：
+
+```
+POST /api/v1/node/report-metrics
+（Header 同上）
+
+Body:
+{
+  "nodeId": 1,
+  "metrics": [
+    { "time": "2025-01-01T12:00:00Z", "cpu": 12.5, "mem": 45.2, "bandwidthIn": 1024000, "bandwidthOut": 2048000, "qps": 567, "cacheHitRate": 92.5 }
+  ]
+}
+```
+
+上报流量：
+
+```
+POST /api/v1/node/report-traffic
+（Header 同上）
+
+Body:
+{
+  "nodeId": 1,
+  "stats": [
+    { "domainId": 1, "time": "2025-01-01T12:00:00Z", "traffic": 1073741824, "requests": 12345 }
+  ]
+}
+```
+
+上报日志：
+
+```
+POST /api/v1/node/report-logs
+（Header 同上）
+
+Body:
+{
+  "nodeId": 1,
+  "logs": [
+    { "time": "...", "domainId": 1, "ip": "1.1.1.1", "url": "/a.jpg", "status": 200, "bytes": 1024, "ua": "..." }
+  ]
+}
+```
+
+注册（首次）：
+
+```
+POST /api/v1/node/register
+Body:
+{
+  "nodeId": 1,
+  "token": "xxxxxx",
+  "version": "1.21.4.1",
+  "ip": "1.1.1.1",
+  "cpuCores": 4,
+  "memoryMb": 8192,
+  "diskGb": 100
+}
+```
+
+6.2 控制端 → 节点
+
+推送配置：
+
+```
+POST https://<node-ip>:443/config/push
+Header: X-Node-Token: xxxxxx
+        X-Timestamp: 1704067200
+        X-Signature: hmac_sha256(body + timestamp, token)
+
+Body:
+{
+  "version": 123,
+  "type": "full" | "incremental",
+  "configs": {
+    "domains": [ ... ],
+    "cacheRules": [ ... ],
+    "origins": [ ... ],
+    "certs": [ ... ],
+    "wafRules": [ ... ]
+  }
+}
+```
+
+触发重载：
+
+```
+POST https://<node-ip>:443/config/reload
+Header: X-Node-Token: xxxxxx
+Body: { "version": 123 }
+```
+
+下发指令：
+
+```
+POST https://<node-ip>:443/command
+Header: X-Node-Token: xxxxxx
+Body:
+{
+  "command": "purge" | "upgrade" | "restart",
+  "params": { "urls": ["..."] }
+}
+```
+
+6.3 签名规则
+
+```
+signature = HMAC-SHA256(
+  body_json_string + "|" + timestamp,
+  node_token
+)
+```
+
+· timestamp 为 Unix 秒，与服务器时间偏差不超过 300 秒
+· 防重放：控制端缓存最近 5 分钟的 signature
+
+---
+
+7. Webhook 接口
+
+7.1 支付回调
+
+```
+POST /api/v1/webhook/payment/:channel
+```
+
+channel：wechat / alipay / stripe
+
+· 验签后更新订单状态
+· 返回渠道要求的格式
+
+7.2 厂商回调
+
+```
+POST /api/v1/webhook/vendor/:code
+```
+
+code：ali / tencent / cloudflare
+
+· 处理厂商异步通知（证书签发、域名状态变更等）
+
+---
+
+8. 对外 OpenAPI
+
+独立鉴权：AccessKey + SecretKey
+签名：HMAC-SHA256
+
+8.1 签名规则
+
+```
+stringToSign = HTTPMethod + "\n" +
+               Path + "\n" +
+               QueryString + "\n" +
+               AccessKey + "\n" +
+               Timestamp + "\n" +
+               BodyMD5
+
+signature = Base64(HMAC-SHA256(stringToSign, SecretKey))
+```
+
+Header：
+
+```
+X-Access-Key: xxx
+X-Timestamp: 1704067200
+X-Signature: xxx
+```
+
+8.2 开放接口
+
+```
+POST   /api/v1/openapi/domain/create      添加域名
+GET    /api/v1/openapi/domain/list        域名列表
+GET    /api/v1/openapi/domain/:id         域名详情
+DELETE /api/v1/openapi/domain/:id         删除域名
+PUT    /api/v1/openapi/domain/:id/cache   更新缓存
+PUT    /api/v1/openapi/domain/:id/origin  更新回源
+POST   /api/v1/openapi/purge              刷新
+GET    /api/v1/openapi/purge/:taskId      刷新状态
+GET    /api/v1/openapi/statistics/traffic 流量统计
+GET    /api/v1/openapi/statistics/logs    日志
+```
+
+8.3 限流
+
+· 按 AccessKey 限流，默认 100 QPS
+· 套餐可配置
+
+---
+
+9. WebSocket 接口
+
+9.1 实时日志
+
+```
+WS /api/v1/user/logs/realtime?token=xxx
+```
+
+订阅：
+
+```json
+{
+  "action": "subscribe",
+  "domainId": 1,
+  "filters": {
+    "statusCode": [404, 500],
+    "ip": "1.1.1.1",
+    "url": "/api"
+  }
+}
+```
+
+推送：
+
+```json
+{
+  "type": "log",
+  "data": {
+    "time": "2025-01-01T12:00:00Z",
+    "domain": "cdn.example.com",
+    "ip": "1.1.1.1",
+    "url": "/a.jpg",
+    "status": 200,
+    "bytes": 1024,
+    "ua": "..."
+  }
+}
+```
+
+套餐限制：
+
+· feature_flags.realtime_log = false 时连接被拒，返回 40302
+
+9.2 实时监控
+
+```
+WS /api/v1/admin/nodes/realtime?token=xxx
+```
+
+推送节点实时指标，管理员端仪表盘用。
+
+9.3 通知推送
+
+```
+WS /api/v1/user/notifications?token=xxx
+```
+
+推送：告警、工单回复、公告、套餐到期提醒。
+
+---
+
+10. 接口调用示例
+
+10.1 用户登录并获取域名列表
+
+```bash
+# 1. 登录
+curl -X POST https://panel/api/v1/auth/login \
+  -H "Content-Type: application/json" \
+  -d '{"username":"user1","password":"xxx"}'
+
+# 响应
+{
+  "code": 0,
+  "data": {
+    "accessToken": "eyJ...",
+    "refreshToken": "eyJ...",
+    "expiresIn": 7200
+  }
+}
+
+# 2. 获取域名列表
+curl -X GET "https://panel/api/v1/user/domains?page=1&pageSize=20" \
+  -H "Authorization: Bearer eyJ..."
+```
+
+10.2 管理员创建节点
+
+```bash
+curl -X POST https://panel/api/v1/admin/nodes \
+  -H "Authorization: Bearer eyJ..." \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "香港节点-01",
+    "ip": "1.1.1.1",
+    "port": 443,
+    "region": "HK",
+    "nodeGroupId": 1
+  }'
+```
+
+10.3 节点上报心跳
+
+```bash
+TIMESTAMP=$(date +%s)
+BODY='{"nodeId":1,"version":"1.21.4.1","load":{"cpu":12.5}}'
+SIGNATURE=$(echo -n "${BODY}|${TIMESTAMP}" | openssl dgst -sha256 -hmac "node_token" | awk '{print $2}')
+
+curl -X POST https://panel/api/v1/node/heartbeat \
+  -H "X-Node-Id: 1" \
+  -H "X-Node-Token: node_token" \
+  -H "X-Timestamp: ${TIMESTAMP}" \
+  -H "X-Signature: ${SIGNATURE}" \
+  -H "Content-Type: application/json" \
+  -d "${BODY}"
+```
+
+---
+
+11. 接口清单统计
+
+模块 接口数
+认证 15
+用户端 80+
+管理员端 90+
+节点通信 8
+Webhook 2
+OpenAPI 10
+WebSocket 3
+合计 约 210
+
+---
+
+12. Swagger 文档
+
+· 后端 NestJS 用 @nestjs/swagger 自动生成
+· 访问：https://panel/api/docs
+· 生产环境可关闭或加鉴权
+· 每个 DTO 用 @ApiProperty 标注
+
+---
+
+本文档结束。确认后进入 04-frontend.md。
+
+---
+
+
+

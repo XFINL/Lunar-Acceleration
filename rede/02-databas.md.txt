@@ -1,0 +1,1362 @@
+02-database.md
+
+```markdown
+# CDN 加速控制面板 — 数据库设计
+
+> 版本：v0.1
+> 数据库：MySQL 8.0
+> 字符集：utf8mb4 / utf8mb4_unicode_ci
+> 引擎：InnoDB
+> 时区：UTC 存储，展示层转换
+
+---
+
+## 1. 设计原则
+
+| 原则 | 说明 |
+|------|------|
+| 主键 | 统一 `bigint unsigned auto_increment`，避免 UUID 索引膨胀 |
+| 软删除 | 重要表用 `deleted_at`，不物理删除 |
+| 时间字段 | `created_at` / `updated_at` 统一 datetime |
+| 金额 | `decimal(12,2)`，不用 float |
+| 流量 | `bigint`，单位字节 |
+| 带宽 | `int`，单位 Kbps |
+| JSON | MySQL 原生 JSON 类型，用于弹性配置 |
+| 枚举 | `tinyint` + 代码注释，不用 ENUM 类型 |
+| 索引 | 高频查询字段建索引，联合索引遵循最左前缀 |
+| 分区 | 大表按月分区（统计、日志、审计） |
+| 分片 | 用户表预留按 user_id 哈希分片能力 |
+
+---
+
+## 2. 表清单总览
+
+| 模块 | 表 |
+|------|----|
+| 用户与权限 | users, roles, permissions, role_permissions, user_roles, user_api_keys, user_login_logs, user_balances |
+| 套餐与计费 | packages, user_packages, orders, order_items, payments, payment_channels, transactions, traffic_usage |
+| 域名与配置 | domains, domain_configs, cache_rules, origin_groups, origins, certificates |
+| 刷新预热 | purge_tasks, purge_records |
+| 节点（自建） | nodes, node_groups, node_metrics, node_configs, node_deploy_logs, node_health_checks, node_tokens |
+| 厂商（第三方） | vendors, vendor_accounts, vendor_resources, vendor_sync_logs |
+| 调度中心 | schedule_policies, dns_records, loadbalance_rules, failover_rules |
+| 统计 | traffic_stats_hourly, traffic_stats_daily, region_stats, status_code_stats, top_url_stats |
+| WAF | waf_rules, waf_default_rules, waf_logs |
+| 网站配置 | site_configs（或拆分多表） |
+| 系统配置 | system_configs, alarm_rules, alarms |
+| 内容与工单 | tickets, ticket_replies, notices, help_docs |
+| 审计 | audit_logs |
+
+---
+
+## 3. 用户与权限模块
+
+### 3.1 users 用户表
+
+```sql
+CREATE TABLE `users` (
+  `id`              bigint unsigned NOT NULL AUTO_INCREMENT,
+  `username`        varchar(64)     NOT NULL COMMENT '用户名',
+  `email`           varchar(128)    DEFAULT NULL COMMENT '邮箱',
+  `phone`           varchar(32)     DEFAULT NULL COMMENT '手机号',
+  `password_hash`   varchar(255)    NOT NULL COMMENT '密码哈希',
+  `nickname`        varchar(64)     DEFAULT NULL COMMENT '昵称',
+  `avatar`          varchar(255)    DEFAULT NULL COMMENT '头像URL',
+  `status`          tinyint         NOT NULL DEFAULT 1 COMMENT '0禁用 1正常 2待审核',
+  `role_type`       tinyint         NOT NULL DEFAULT 1 COMMENT '1用户 2管理员 3超管',
+  `balance`         decimal(12,2)   NOT NULL DEFAULT 0.00 COMMENT '余额',
+  `package_id`      bigint unsigned DEFAULT NULL COMMENT '当前套餐ID',
+  `package_expire_at` datetime      DEFAULT NULL COMMENT '套餐到期时间',
+  `invite_code`     varchar(32)     DEFAULT NULL COMMENT '邀请码',
+  `inviter_id`      bigint unsigned DEFAULT NULL COMMENT '邀请人ID',
+  `two_fa_secret`   varchar(64)     DEFAULT NULL COMMENT '2FA密钥',
+  `last_login_at`   datetime        DEFAULT NULL,
+  `last_login_ip`   varchar(64)     DEFAULT NULL,
+  `created_at`      datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at`      datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_username` (`username`),
+  UNIQUE KEY `uk_email` (`email`),
+  UNIQUE KEY `uk_invite_code` (`invite_code`),
+  KEY `idx_status` (`status`),
+  KEY `idx_package_id` (`package_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+```
+
+3.2 roles 角色表
+
+```sql
+CREATE TABLE `roles` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`        varchar(64)     NOT NULL COMMENT '角色名',
+  `code`        varchar(64)     NOT NULL COMMENT '角色标识',
+  `description` varchar(255)    DEFAULT NULL,
+  `is_system`   tinyint         NOT NULL DEFAULT 0 COMMENT '1系统内置 0自定义',
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色表';
+```
+
+3.3 permissions 权限点表
+
+```sql
+CREATE TABLE `permissions` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`        varchar(64)     NOT NULL COMMENT '权限名',
+  `code`        varchar(128)    NOT NULL COMMENT '权限标识 如 domain:create',
+  `resource`    varchar(64)     NOT NULL COMMENT '资源 domain/cache/...',
+  `action`      varchar(32)     NOT NULL COMMENT '动作 create/read/update/delete',
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`),
+  KEY `idx_resource` (`resource`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='权限点表';
+```
+
+3.4 role_permissions 角色权限关联
+
+```sql
+CREATE TABLE `role_permissions` (
+  `role_id`       bigint unsigned NOT NULL,
+  `permission_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`role_id`, `permission_id`),
+  KEY `idx_permission_id` (`permission_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='角色权限关联';
+```
+
+3.5 user_roles 用户角色关联
+
+```sql
+CREATE TABLE `user_roles` (
+  `user_id` bigint unsigned NOT NULL,
+  `role_id` bigint unsigned NOT NULL,
+  PRIMARY KEY (`user_id`, `role_id`),
+  KEY `idx_role_id` (`role_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户角色关联';
+```
+
+3.6 user_api_keys 用户API密钥
+
+```sql
+CREATE TABLE `user_api_keys` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`      bigint unsigned NOT NULL,
+  `name`         varchar(64)     NOT NULL COMMENT '密钥名称',
+  `access_key`   varchar(64)     NOT NULL COMMENT 'Access Key',
+  `secret_key`   varchar(128)    NOT NULL COMMENT 'Secret Key（加密存储）',
+  `status`       tinyint         NOT NULL DEFAULT 1 COMMENT '0禁用 1启用',
+  `expire_at`    datetime        DEFAULT NULL,
+  `last_used_at` datetime        DEFAULT NULL,
+  `created_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_access_key` (`access_key`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户API密钥';
+```
+
+3.7 user_login_logs 登录日志
+
+```sql
+CREATE TABLE `user_login_logs` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`    bigint unsigned DEFAULT NULL,
+  `username`   varchar(64)     DEFAULT NULL,
+  `ip`         varchar(64)     NOT NULL,
+  `region`     varchar(64)     DEFAULT NULL COMMENT '归属地',
+  `ua`         varchar(512)    DEFAULT NULL,
+  `status`     tinyint         NOT NULL COMMENT '1成功 0失败',
+  `message`    varchar(255)    DEFAULT NULL,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='登录日志'
+PARTITION BY RANGE (TO_DAYS(created_at)) (
+  PARTITION p202501 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p202502 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION pmax VALUES LESS THAN MAXVALUE
+);
+```
+
+3.8 user_balances 用户余额流水
+
+```sql
+CREATE TABLE `user_balances` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`       bigint unsigned NOT NULL,
+  `type`          tinyint         NOT NULL COMMENT '1充值 2消费 3退款 4管理员调整',
+  `amount`        decimal(12,2)   NOT NULL COMMENT '变动金额，正负',
+  `balance_after` decimal(12,2)   NOT NULL COMMENT '变动后余额',
+  `ref_type`      varchar(32)     DEFAULT NULL COMMENT '关联类型 order/package',
+  `ref_id`        bigint unsigned DEFAULT NULL,
+  `remark`        varchar(255)    DEFAULT NULL,
+  `operator_id`   bigint unsigned DEFAULT NULL COMMENT '操作人（管理员调整时）',
+  `created_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='余额流水';
+```
+
+---
+
+4. 套餐与计费模块
+
+4.1 packages 套餐表
+
+```sql
+CREATE TABLE `packages` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`              varchar(64)     NOT NULL COMMENT '套餐名',
+  `code`              varchar(64)     NOT NULL COMMENT '套餐标识',
+  `description`       varchar(512)    DEFAULT NULL,
+  `access_type`       tinyint         NOT NULL COMMENT '1自建节点 2第三方厂商 3混合',
+  `vendor_id`         bigint unsigned DEFAULT NULL COMMENT 'access_type=2时指定厂商',
+  `traffic_quota`     bigint          NOT NULL DEFAULT 0 COMMENT '流量额度(字节)',
+  `bandwidth_limit`   int             NOT NULL DEFAULT 0 COMMENT '带宽上限(Kbps)',
+  `domain_limit`      int             NOT NULL DEFAULT 0 COMMENT '域名数上限',
+  `request_quota`     bigint          NOT NULL DEFAULT 0 COMMENT '请求数额度',
+  `feature_flags`     json            DEFAULT NULL COMMENT '功能开关 WAF/实时日志/边缘脚本等',
+  `over_quota_policy` tinyint         NOT NULL DEFAULT 1 COMMENT '1限速 2按量扣费 3停服',
+  `price`             decimal(10,2)   NOT NULL DEFAULT 0.00,
+  `period`            tinyint         NOT NULL DEFAULT 1 COMMENT '1月 2季 3年',
+  `status`            tinyint         NOT NULL DEFAULT 1 COMMENT '0下架 1上架',
+  `sort`              int             NOT NULL DEFAULT 0,
+  `created_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`),
+  KEY `idx_status` (`status`),
+  KEY `idx_vendor_id` (`vendor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='套餐表';
+```
+
+feature_flags 示例：
+
+```json
+{
+  "waf": true,
+  "realtime_log": true,
+  "log_delivery": false,
+  "custom_cache_key": true,
+  "ip_region_block": true,
+  "max_cache_rules": 50
+}
+```
+
+4.2 user_packages 用户套餐记录
+
+```sql
+CREATE TABLE `user_packages` (
+  `id`               bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`          bigint unsigned NOT NULL,
+  `package_id`       bigint unsigned NOT NULL,
+  `start_at`         datetime        NOT NULL,
+  `expire_at`        datetime        NOT NULL,
+  `traffic_used`     bigint          NOT NULL DEFAULT 0 COMMENT '已用流量(字节)',
+  `request_used`     bigint          NOT NULL DEFAULT 0 COMMENT '已用请求数',
+  `traffic_reset_at` datetime        DEFAULT NULL COMMENT '流量重置时间',
+  `status`           tinyint         NOT NULL DEFAULT 1 COMMENT '1生效 2过期 3取消',
+  `created_at`       datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_expire_at` (`expire_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户套餐记录';
+```
+
+4.3 orders 订单表
+
+```sql
+CREATE TABLE `orders` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `order_no`     varchar(64)     NOT NULL COMMENT '订单号',
+  `user_id`      bigint unsigned NOT NULL,
+  `package_id`   bigint unsigned DEFAULT NULL,
+  `amount`       decimal(12,2)   NOT NULL COMMENT '原价',
+  `discount`     decimal(12,2)   NOT NULL DEFAULT 0.00 COMMENT '优惠',
+  `final_amount` decimal(12,2)   NOT NULL COMMENT '实付',
+  `status`       tinyint         NOT NULL DEFAULT 1 COMMENT '1待支付 2已支付 3已取消 4已退款',
+  `pay_channel`  varchar(32)     DEFAULT NULL COMMENT 'wechat/alipay/stripe',
+  `pay_at`       datetime        DEFAULT NULL,
+  `created_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_order_no` (`order_no`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单表';
+```
+
+4.4 order_items 订单明细
+
+```sql
+CREATE TABLE `order_items` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `order_id`   bigint unsigned NOT NULL,
+  `item_type`  varchar(32)     NOT NULL COMMENT 'package/traffic_pack/bandwidth_pack',
+  `item_id`    bigint unsigned NOT NULL,
+  `name`       varchar(128)    NOT NULL,
+  `price`      decimal(12,2)   NOT NULL,
+  `quantity`   int             NOT NULL DEFAULT 1,
+  `subtotal`   decimal(12,2)   NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_order_id` (`order_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='订单明细';
+```
+
+4.5 payments 支付记录（占位）
+
+```sql
+CREATE TABLE `payments` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `order_id`      bigint unsigned NOT NULL,
+  `user_id`       bigint unsigned NOT NULL,
+  `channel`       varchar(32)     NOT NULL,
+  `trade_no`      varchar(128)    DEFAULT NULL COMMENT '第三方交易号',
+  `amount`        decimal(12,2)   NOT NULL,
+  `status`        tinyint         NOT NULL DEFAULT 1 COMMENT '1待支付 2成功 3失败 4已退款',
+  `callback_data` json            DEFAULT NULL,
+  `created_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_order_id` (`order_id`),
+  KEY `idx_trade_no` (`trade_no`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付记录';
+```
+
+4.6 payment_channels 支付渠道配置（占位）
+
+```sql
+CREATE TABLE `payment_channels` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `channel`    varchar(32)     NOT NULL COMMENT 'wechat/alipay/stripe',
+  `name`       varchar(64)     NOT NULL,
+  `config`     json            DEFAULT NULL COMMENT '商户号/密钥等',
+  `status`     tinyint         NOT NULL DEFAULT 0 COMMENT '0禁用 1启用',
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_channel` (`channel`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='支付渠道配置';
+```
+
+4.7 transactions 资金流水
+
+```sql
+CREATE TABLE `transactions` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`       bigint unsigned NOT NULL,
+  `type`          tinyint         NOT NULL COMMENT '1收入 2支出',
+  `amount`        decimal(12,2)   NOT NULL,
+  `balance_after` decimal(12,2)   NOT NULL,
+  `ref_type`      varchar(32)     DEFAULT NULL,
+  `ref_id`        bigint unsigned DEFAULT NULL,
+  `remark`        varchar(255)    DEFAULT NULL,
+  `created_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='资金流水';
+```
+
+4.8 traffic_usage 流量用量（小时聚合）
+
+```sql
+CREATE TABLE `traffic_usage` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`    bigint unsigned NOT NULL,
+  `domain_id`  bigint unsigned NOT NULL,
+  `stat_time`  datetime        NOT NULL COMMENT '整点时间',
+  `traffic`    bigint          NOT NULL DEFAULT 0 COMMENT '流量(字节)',
+  `requests`   bigint          NOT NULL DEFAULT 0,
+  `bandwidth`  int             NOT NULL DEFAULT 0 COMMENT '峰值带宽(Kbps)',
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_domain_time` (`user_id`, `domain_id`, `stat_time`),
+  KEY `idx_stat_time` (`stat_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='流量用量'
+PARTITION BY RANGE (TO_DAYS(stat_time)) (
+  PARTITION p202501 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p202502 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION pmax VALUES LESS THAN MAXVALUE
+);
+```
+
+---
+
+5. 域名与配置模块
+
+5.1 domains 域名表
+
+```sql
+CREATE TABLE `domains` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`       bigint unsigned NOT NULL,
+  `domain`        varchar(255)    NOT NULL COMMENT '域名',
+  `cname`         varchar(255)    DEFAULT NULL COMMENT '分配的CNAME',
+  `access_type`   tinyint         NOT NULL COMMENT '1自建 2厂商 3混合（继承套餐快照）',
+  `vendor_id`     bigint unsigned DEFAULT NULL,
+  `node_group_id` bigint unsigned DEFAULT NULL COMMENT '自建时指定节点组',
+  `status`        tinyint         NOT NULL DEFAULT 1 COMMENT '1待审核 2部署中 3已启用 4停用 5审核拒绝',
+  `audit_status`  tinyint         NOT NULL DEFAULT 0 COMMENT '0待审 1通过 2拒绝',
+  `audit_remark`  varchar(255)    DEFAULT NULL,
+  `business_type` varchar(32)     DEFAULT NULL COMMENT '网站/下载/视频/直播',
+  `tags`          json            DEFAULT NULL,
+  `remark`        varchar(255)    DEFAULT NULL,
+  `created_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  `deleted_at`    datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_domain` (`domain`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_node_group_id` (`node_group_id`),
+  KEY `idx_vendor_id` (`vendor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='域名表';
+```
+
+5.2 domain_configs 域名配置
+
+```sql
+CREATE TABLE `domain_configs` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`         bigint unsigned NOT NULL,
+  `default_ttl`       int             NOT NULL DEFAULT 3600 COMMENT '默认缓存TTL(秒)',
+  `origin_protocol`   varchar(16)     NOT NULL DEFAULT 'http' COMMENT 'http/https/follow',
+  `origin_host`       varchar(255)    DEFAULT NULL,
+  `https_enabled`     tinyint         NOT NULL DEFAULT 0,
+  `cert_id`           bigint unsigned DEFAULT NULL,
+  `force_https`       tinyint         NOT NULL DEFAULT 0,
+  `hsts_enabled`      tinyint         NOT NULL DEFAULT 0,
+  `hsts_max_age`      int             DEFAULT NULL,
+  `tls_version`       varchar(32)     DEFAULT NULL COMMENT '如 TLSv1.2,TLSv1.3',
+  `referer_rule`      json            DEFAULT NULL,
+  `ip_rule`           json            DEFAULT NULL,
+  `ua_rule`           json            DEFAULT NULL,
+  `speed_limit`       json            DEFAULT NULL,
+  `extra`             json            DEFAULT NULL,
+  `updated_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_domain_id` (`domain_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='域名配置';
+```
+
+ip_rule 示例：
+
+```json
+{
+  "mode": "whitelist",
+  "ips": ["1.1.1.1", "2.2.2.0/24"],
+  "regions": ["CN", "HK"]
+}
+```
+
+5.3 cache_rules 缓存规则
+
+```sql
+CREATE TABLE `cache_rules` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`     bigint unsigned NOT NULL,
+  `priority`      int             NOT NULL DEFAULT 0 COMMENT '越小越优先',
+  `name`          varchar(64)     DEFAULT NULL,
+  `match_type`    tinyint         NOT NULL COMMENT '1路径 2后缀 3文件类型 4状态码 5请求头 6参数',
+  `match_value`   varchar(512)    NOT NULL,
+  `match_mode`    tinyint         NOT NULL DEFAULT 1 COMMENT '1精确 2前缀 3正则 4包含',
+  `action`        tinyint         NOT NULL COMMENT '1缓存 2不缓存 3强制缓存',
+  `ttl`           int             DEFAULT NULL COMMENT '秒',
+  `ignore_params` tinyint         NOT NULL DEFAULT 0,
+  `cache_key`     varchar(255)    DEFAULT NULL,
+  `status`        tinyint         NOT NULL DEFAULT 1,
+  `created_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_priority` (`domain_id`, `priority`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='缓存规则';
+```
+
+5.4 origin_groups 源站组
+
+```sql
+CREATE TABLE `origin_groups` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`    bigint unsigned NOT NULL,
+  `name`         varchar(64)     NOT NULL,
+  `lb_policy`    tinyint         NOT NULL DEFAULT 1 COMMENT '1轮询 2权重 3最少连接',
+  `health_check` json            DEFAULT NULL,
+  `created_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_id` (`domain_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='源站组';
+```
+
+health_check 示例：
+
+```json
+{
+  "enabled": true,
+  "protocol": "http",
+  "path": "/health",
+  "interval": 10,
+  "timeout": 3,
+  "fail_threshold": 3,
+  "recover_threshold": 2
+}
+```
+
+5.5 origins 源站
+
+```sql
+CREATE TABLE `origins` (
+  `id`              bigint unsigned NOT NULL AUTO_INCREMENT,
+  `origin_group_id` bigint unsigned NOT NULL,
+  `address`         varchar(255)    NOT NULL COMMENT 'IP或域名',
+  `port`            int             NOT NULL DEFAULT 80,
+  `weight`          int             NOT NULL DEFAULT 1,
+  `protocol`        varchar(16)     NOT NULL DEFAULT 'http',
+  `host`            varchar(255)    DEFAULT NULL,
+  `status`          tinyint         NOT NULL DEFAULT 1,
+  `created_at`      datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_origin_group_id` (`origin_group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='源站';
+```
+
+5.6 certificates 证书
+
+```sql
+CREATE TABLE `certificates` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`     bigint unsigned NOT NULL,
+  `domain_id`   bigint unsigned DEFAULT NULL,
+  `name`        varchar(128)    NOT NULL,
+  `cert_type`   tinyint         NOT NULL COMMENT '1上传 2自动申请',
+  `cert_pem`    text            NOT NULL,
+  `key_pem`     text            NOT NULL,
+  `issuer`      varchar(128)    DEFAULT NULL,
+  `not_before`  datetime        DEFAULT NULL,
+  `not_after`   datetime        DEFAULT NULL,
+  `auto_renew`  tinyint         NOT NULL DEFAULT 0,
+  `status`      tinyint         NOT NULL DEFAULT 1,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_not_after` (`not_after`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='证书';
+```
+
+---
+
+6. 刷新预热模块
+
+6.1 purge_tasks 刷新任务
+
+```sql
+CREATE TABLE `purge_tasks` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`     bigint unsigned NOT NULL,
+  `domain_id`   bigint unsigned NOT NULL,
+  `task_no`     varchar(64)     NOT NULL,
+  `type`        tinyint         NOT NULL COMMENT '1URL刷新 2目录刷新 3URL预热 4标签刷新',
+  `targets`     json            NOT NULL COMMENT '目标列表',
+  `status`      tinyint         NOT NULL DEFAULT 1 COMMENT '1排队 2执行中 3完成 4失败',
+  `total`       int             NOT NULL DEFAULT 0,
+  `success`     int             NOT NULL DEFAULT 0,
+  `failed`      int             NOT NULL DEFAULT 0,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `finished_at` datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_task_no` (`task_no`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_domain_id` (`domain_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='刷新任务';
+```
+
+6.2 purge_records 刷新明细
+
+```sql
+CREATE TABLE `purge_records` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `task_id`    bigint unsigned NOT NULL,
+  `target`     varchar(512)    NOT NULL,
+  `status`     tinyint         NOT NULL COMMENT '1成功 2失败',
+  `message`    varchar(255)    DEFAULT NULL,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_task_id` (`task_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='刷新明细';
+```
+
+---
+
+7. 节点模块（自建）
+
+7.1 node_groups 节点组
+
+```sql
+CREATE TABLE `node_groups` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`        varchar(64)     NOT NULL,
+  `description` varchar(255)    DEFAULT NULL,
+  `region`      varchar(64)     DEFAULT NULL,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点组';
+```
+
+7.2 nodes 节点表
+
+```sql
+CREATE TABLE `nodes` (
+  `id`              bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`            varchar(64)     NOT NULL,
+  `ip`              varchar(64)     NOT NULL,
+  `port`            int             NOT NULL DEFAULT 443,
+  `region`          varchar(64)     DEFAULT NULL,
+  `isp`             varchar(64)     DEFAULT NULL,
+  `node_group_id`   bigint unsigned DEFAULT NULL,
+  `status`          tinyint         NOT NULL DEFAULT 1 COMMENT '1在线 2离线 3维护 4部署中',
+  `weight`          int             NOT NULL DEFAULT 1,
+  `version`         varchar(32)     DEFAULT NULL COMMENT 'OpenResty版本',
+  `cpu_cores`       int             DEFAULT NULL,
+  `memory_mb`       int             DEFAULT NULL,
+  `disk_gb`         int             DEFAULT NULL,
+  `bandwidth_mbps`  int             DEFAULT NULL,
+  `last_heartbeat`  datetime        DEFAULT NULL,
+  `created_at`      datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`      datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_region` (`region`),
+  KEY `idx_node_group_id` (`node_group_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点';
+```
+
+7.3 node_tokens 节点令牌
+
+```sql
+CREATE TABLE `node_tokens` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `node_id`    bigint unsigned NOT NULL,
+  `token`      varchar(128)    NOT NULL COMMENT '节点鉴权令牌（加密存储）',
+  `status`     tinyint         NOT NULL DEFAULT 1 COMMENT '0禁用 1启用',
+  `expire_at`  datetime        DEFAULT NULL,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_node_id` (`node_id`),
+  KEY `idx_token` (`token`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点令牌';
+```
+
+7.4 node_metrics 节点监控
+
+```sql
+CREATE TABLE `node_metrics` (
+  `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+  `node_id`        bigint unsigned NOT NULL,
+  `stat_time`      datetime        NOT NULL,
+  `cpu_usage`      decimal(5,2)    DEFAULT NULL COMMENT 'CPU使用率%',
+  `mem_usage`      decimal(5,2)    DEFAULT NULL,
+  `disk_usage`     decimal(5,2)    DEFAULT NULL,
+  `bandwidth_in`   bigint          DEFAULT NULL COMMENT '入向bps',
+  `bandwidth_out`  bigint          DEFAULT NULL COMMENT '出向bps',
+  `connections`    int             DEFAULT NULL,
+  `qps`            int             DEFAULT NULL,
+  `cache_hit_rate` decimal(5,2)    DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_node_time` (`node_id`, `stat_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点监控'
+PARTITION BY RANGE (TO_DAYS(stat_time)) (
+  PARTITION p202501 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p202502 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION pmax VALUES LESS THAN MAXVALUE
+);
+```
+
+7.5 node_configs 节点配置快照
+
+```sql
+CREATE TABLE `node_configs` (
+  `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+  `node_id`        bigint unsigned NOT NULL,
+  `config_type`    varchar(32)     NOT NULL COMMENT 'nginx/lua/cert/domain',
+  `config_content` json            DEFAULT NULL,
+  `version`        int             NOT NULL DEFAULT 1,
+  `pushed_at`      datetime        DEFAULT NULL,
+  `status`         tinyint         NOT NULL DEFAULT 1 COMMENT '1成功 2失败',
+  `message`        varchar(255)    DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_node_id` (`node_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点配置快照';
+```
+
+7.6 node_deploy_logs 节点部署日志
+
+```sql
+CREATE TABLE `node_deploy_logs` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `node_id`     bigint unsigned NOT NULL,
+  `action`      varchar(64)     NOT NULL COMMENT 'install/start/stop/reload/upgrade',
+  `status`      tinyint         NOT NULL COMMENT '1成功 2失败',
+  `message`     text            DEFAULT NULL,
+  `operator_id` bigint unsigned DEFAULT NULL,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_node_id` (`node_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='节点部署日志';
+```
+
+7.7 node_health_checks 健康检查记录
+
+```sql
+CREATE TABLE `node_health_checks` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `node_id`    bigint unsigned NOT NULL,
+  `check_time` datetime        NOT NULL,
+  `status`     tinyint         NOT NULL COMMENT '1健康 0异常',
+  `latency_ms` int             DEFAULT NULL,
+  `message`    varchar(255)    DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_node_time` (`node_id`, `check_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='健康检查记录';
+```
+
+---
+
+8. 厂商模块（第三方）
+
+8.1 vendors 厂商表
+
+```sql
+CREATE TABLE `vendors` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`        varchar(64)     NOT NULL COMMENT '厂商名',
+  `code`        varchar(32)     NOT NULL COMMENT '标识 ali/tencent/cloudflare/aws',
+  `driver`      varchar(64)     NOT NULL COMMENT '驱动类名',
+  `logo`        varchar(255)    DEFAULT NULL,
+  `description` varchar(512)    DEFAULT NULL,
+  `status`      tinyint         NOT NULL DEFAULT 1,
+  `sort`        int             NOT NULL DEFAULT 0,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_code` (`code`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='厂商';
+```
+
+8.2 vendor_accounts 厂商账号
+
+```sql
+CREATE TABLE `vendor_accounts` (
+  `id`               bigint unsigned NOT NULL AUTO_INCREMENT,
+  `vendor_id`        bigint unsigned NOT NULL,
+  `name`             varchar(64)     NOT NULL,
+  `access_key`       varchar(255)    NOT NULL COMMENT '加密存储',
+  `secret_key`       varchar(255)    NOT NULL COMMENT '加密存储',
+  `config`           json            DEFAULT NULL,
+  `status`           tinyint         NOT NULL DEFAULT 1,
+  `last_sync_at`     datetime        DEFAULT NULL,
+  `created_at`       datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_vendor_id` (`vendor_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='厂商账号';
+```
+
+8.3 vendor_resources 厂商资源映射
+
+```sql
+CREATE TABLE `vendor_resources` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `vendor_account_id` bigint unsigned NOT NULL,
+  `domain_id`         bigint unsigned NOT NULL,
+  `vendor_domain_id`  varchar(128)    DEFAULT NULL,
+  `vendor_cert_id`    varchar(128)    DEFAULT NULL,
+  `resource_data`     json            DEFAULT NULL,
+  `synced_at`         datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_id` (`domain_id`),
+  KEY `idx_vendor_account_id` (`vendor_account_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='厂商资源映射';
+```
+
+8.4 vendor_sync_logs 同步日志
+
+```sql
+CREATE TABLE `vendor_sync_logs` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `vendor_account_id` bigint unsigned NOT NULL,
+  `action`            varchar(64)     NOT NULL,
+  `status`            tinyint         NOT NULL,
+  `message`           text            DEFAULT NULL,
+  `created_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_vendor_account_id` (`vendor_account_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='厂商同步日志';
+```
+
+---
+
+9. 调度中心模块
+
+9.1 schedule_policies 调度策略
+
+```sql
+CREATE TABLE `schedule_policies` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`       varchar(64)     NOT NULL,
+  `type`       tinyint         NOT NULL COMMENT '1地理 2权重 3成本 4故障转移',
+  `config`     json            DEFAULT NULL,
+  `status`     tinyint         NOT NULL DEFAULT 1,
+  `priority`   int             NOT NULL DEFAULT 0,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='调度策略';
+```
+
+9.2 dns_records DNS记录
+
+```sql
+CREATE TABLE `dns_records` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`   bigint unsigned NOT NULL,
+  `record_type` varchar(16)     NOT NULL COMMENT 'CNAME/A',
+  `record_value` varchar(255)   NOT NULL,
+  `ttl`         int             NOT NULL DEFAULT 600,
+  `provider`    varchar(64)     DEFAULT NULL COMMENT '第三方DNS服务商',
+  `status`      tinyint         NOT NULL DEFAULT 1,
+  `synced_at`   datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_id` (`domain_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='DNS记录';
+```
+
+9.3 loadbalance_rules 负载均衡规则
+
+```sql
+CREATE TABLE `loadbalance_rules` (
+  `id`            bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`     bigint unsigned NOT NULL,
+  `node_group_id` bigint unsigned NOT NULL,
+  `policy`        tinyint         NOT NULL DEFAULT 1 COMMENT '1轮询 2权重 3最少连接',
+  `config`        json            DEFAULT NULL,
+  `status`        tinyint         NOT NULL DEFAULT 1,
+  `created_at`    datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_id` (`domain_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='负载均衡规则';
+```
+
+9.4 failover_rules 故障转移规则
+
+```sql
+CREATE TABLE `failover_rules` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`         bigint unsigned NOT NULL,
+  `node_group_id`     bigint unsigned NOT NULL,
+  `check_interval`    int             NOT NULL DEFAULT 10 COMMENT '秒',
+  `check_path`        varchar(255)    DEFAULT '/',
+  `check_timeout`     int             NOT NULL DEFAULT 3,
+  `fail_threshold`    int             NOT NULL DEFAULT 3,
+  `recover_threshold` int             NOT NULL DEFAULT 2,
+  `action`            json            DEFAULT NULL,
+  `status`            tinyint         NOT NULL DEFAULT 1,
+  `created_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_id` (`domain_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='故障转移规则';
+```
+
+---
+
+10. 统计模块
+
+10.1 traffic_stats_hourly 小时流量
+
+```sql
+CREATE TABLE `traffic_stats_hourly` (
+  `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`        bigint unsigned NOT NULL,
+  `domain_id`      bigint unsigned NOT NULL,
+  `node_id`        bigint unsigned DEFAULT NULL,
+  `stat_time`      datetime        NOT NULL,
+  `traffic`        bigint          NOT NULL DEFAULT 0,
+  `requests`       bigint          NOT NULL DEFAULT 0,
+  `bandwidth_peak` int             NOT NULL DEFAULT 0,
+  `cache_hit`      bigint          NOT NULL DEFAULT 0,
+  `cache_miss`     bigint          NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_time` (`user_id`, `stat_time`),
+  KEY `idx_domain_time` (`domain_id`, `stat_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='小时流量统计'
+PARTITION BY RANGE (TO_DAYS(stat_time)) (
+  PARTITION p202501 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p202502 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION pmax VALUES LESS THAN MAXVALUE
+);
+```
+
+10.2 traffic_stats_daily 天流量
+
+```sql
+CREATE TABLE `traffic_stats_daily` (
+  `id`             bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`        bigint unsigned NOT NULL,
+  `domain_id`      bigint unsigned NOT NULL,
+  `stat_date`      date            NOT NULL,
+  `traffic`        bigint          NOT NULL DEFAULT 0,
+  `requests`       bigint          NOT NULL DEFAULT 0,
+  `bandwidth_peak` int             NOT NULL DEFAULT 0,
+  `cache_hit`      bigint          NOT NULL DEFAULT 0,
+  `cache_miss`     bigint          NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_user_domain_date` (`user_id`, `domain_id`, `stat_date`),
+  KEY `idx_stat_date` (`stat_date`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='天流量统计';
+```
+
+10.3 region_stats 地域统计
+
+```sql
+CREATE TABLE `region_stats` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`  bigint unsigned NOT NULL,
+  `stat_time`  datetime        NOT NULL,
+  `country`    varchar(64)     DEFAULT NULL,
+  `province`   varchar(64)     DEFAULT NULL,
+  `isp`        varchar(64)     DEFAULT NULL,
+  `traffic`    bigint          NOT NULL DEFAULT 0,
+  `requests`   bigint          NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_time` (`domain_id`, `stat_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='地域统计';
+```
+
+10.4 status_code_stats 状态码统计
+
+```sql
+CREATE TABLE `status_code_stats` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`   bigint unsigned NOT NULL,
+  `stat_time`   datetime        NOT NULL,
+  `status_code` int             NOT NULL,
+  `count`       bigint          NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_time` (`domain_id`, `stat_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='状态码统计';
+```
+
+10.5 top_url_stats TOP URL
+
+```sql
+CREATE TABLE `top_url_stats` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`  bigint unsigned NOT NULL,
+  `stat_time`  datetime        NOT NULL,
+  `url`        varchar(512)    NOT NULL,
+  `requests`   bigint          NOT NULL DEFAULT 0,
+  `traffic`    bigint          NOT NULL DEFAULT 0,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_time` (`domain_id`, `stat_time`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='TOP URL统计';
+```
+
+---
+
+11. WAF 模块
+
+11.1 waf_rules 用户WAF规则
+
+```sql
+CREATE TABLE `waf_rules` (
+  `id`                bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`           bigint unsigned NOT NULL,
+  `domain_id`         bigint unsigned NOT NULL,
+  `name`              varchar(128)    NOT NULL,
+  `type`              tinyint         NOT NULL COMMENT '1默认规则 2自定义规则',
+  `category`          varchar(32)     DEFAULT NULL COMMENT 'sqli/xss/cc/custom',
+  `match_conditions`  json            NOT NULL,
+  `action`            tinyint         NOT NULL COMMENT '1放行 2拦截 3挑战 4限速 5记录',
+  `action_config`     json            DEFAULT NULL,
+  `priority`          int             NOT NULL DEFAULT 0,
+  `status`            tinyint         NOT NULL DEFAULT 1,
+  `created_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`        datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_priority` (`domain_id`, `priority`),
+  KEY `idx_user_id` (`user_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='WAF规则';
+```
+
+match_conditions 示例：
+
+```json
+{
+  "logic": "AND",
+  "conditions": [
+    { "field": "ip", "op": "in", "value": ["1.1.1.0/24"] },
+    { "field": "url", "op": "contains", "value": "/admin" },
+    { "field": "method", "op": "eq", "value": "POST" }
+  ]
+}
+```
+
+11.2 waf_default_rules 默认规则库
+
+```sql
+CREATE TABLE `waf_default_rules` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`         varchar(128)    NOT NULL,
+  `category`     varchar(32)     NOT NULL COMMENT 'sqli/xss/cc/rce/lfi',
+  `rule_content` json            NOT NULL,
+  `severity`     tinyint         NOT NULL DEFAULT 2 COMMENT '1低 2中 3高 4严重',
+  `status`       tinyint         NOT NULL DEFAULT 1,
+  `version`      varchar(32)     DEFAULT NULL,
+  `updated_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_category` (`category`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='WAF默认规则库';
+```
+
+11.3 waf_logs WAF拦截日志
+
+```sql
+CREATE TABLE `waf_logs` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `domain_id`  bigint unsigned NOT NULL,
+  `rule_id`    bigint unsigned DEFAULT NULL,
+  `ip`         varchar(64)     NOT NULL,
+  `url`        varchar(512)    DEFAULT NULL,
+  `ua`         varchar(512)    DEFAULT NULL,
+  `action`     tinyint         NOT NULL,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_domain_time` (`domain_id`, `created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='WAF日志'
+PARTITION BY RANGE (TO_DAYS(created_at)) (
+  PARTITION p202501 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p202502 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION pmax VALUES LESS THAN MAXVALUE
+);
+```
+
+---
+
+12. 网站配置模块
+
+采用 KV 结构，按 group 分组，便于扩展。
+
+12.1 site_configs 网站配置
+
+```sql
+CREATE TABLE `site_configs` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `group_key`    varchar(64)     NOT NULL COMMENT '分组 basic/seo/theme/...',
+  `config_key`   varchar(128)    NOT NULL,
+  `config_value` json            DEFAULT NULL,
+  `description`  varchar(255)    DEFAULT NULL,
+  `updated_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_key` (`group_key`, `config_key`),
+  KEY `idx_group_key` (`group_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='网站配置';
+```
+
+group_key 列表：
+
+group_key 说明
+basic 站点名称、Logo、Favicon、ICP、版权
+seo 标题、关键词、描述、robots、sitemap
+theme 主题色、暗黑模式、登录页样式、自定义CSS
+nav 顶部/底部/侧边栏菜单
+home 首页内容（Banner、公告、套餐、FAQ）
+auth 注册/登录配置
+email SMTP、发件人、邮件模板
+sms 短信服务商、签名、模板
+oauth 第三方登录
+payment 支付渠道（占位）
+service 客服配置
+notice 公告
+i18n 多语言
+agreement 协议文档
+maintenance 维护模式
+api API开放配置
+security 安全配置
+analytics 统计代码
+
+示例数据：
+
+```sql
+INSERT INTO `site_configs` (`group_key`, `config_key`, `config_value`) VALUES
+('basic', 'site_name', '"CDN Panel"'),
+('basic', 'logo', '"/uploads/logo.png"'),
+('basic', 'icp', '"京ICP备xxxxxxxx号"'),
+('auth', 'register_enabled', 'true'),
+('auth', 'register_type', '["email", "phone"]'),
+('auth', 'captcha_type', '"image"'),
+('i18n', 'default_locale', '"zh-TW"'),
+('i18n', 'locales', '["zh-TW", "en", "jp", "de"]');
+```
+
+---
+
+13. 系统配置模块
+
+13.1 system_configs 系统配置
+
+```sql
+CREATE TABLE `system_configs` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `group_key`    varchar(64)     NOT NULL COMMENT 'cache/limit/queue/log/alarm/feature',
+  `config_key`   varchar(128)    NOT NULL,
+  `config_value` json            DEFAULT NULL,
+  `description`  varchar(255)    DEFAULT NULL,
+  `updated_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_group_key` (`group_key`, `config_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='系统配置';
+```
+
+13.2 alarm_rules 告警规则
+
+```sql
+CREATE TABLE `alarm_rules` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `name`       varchar(128)    NOT NULL,
+  `type`       varchar(32)     NOT NULL COMMENT 'node/traffic/error/cert',
+  `conditions` json            NOT NULL,
+  `actions`    json            NOT NULL COMMENT '邮件/短信/webhook',
+  `status`     tinyint         NOT NULL DEFAULT 1,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='告警规则';
+```
+
+13.3 alarms 告警记录
+
+```sql
+CREATE TABLE `alarms` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `rule_id`      bigint unsigned NOT NULL,
+  `target_type`  varchar(32)     NOT NULL,
+  `target_id`    bigint unsigned DEFAULT NULL,
+  `level`        tinyint         NOT NULL COMMENT '1提示 2警告 3严重',
+  `message`      varchar(512)    NOT NULL,
+  `status`       tinyint         NOT NULL DEFAULT 1 COMMENT '1未处理 2已处理',
+  `created_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `resolved_at`  datetime        DEFAULT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_rule_id` (`rule_id`),
+  KEY `idx_status` (`status`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='告警记录';
+```
+
+---
+
+14. 内容与工单模块
+
+14.1 tickets 工单
+
+```sql
+CREATE TABLE `tickets` (
+  `id`           bigint unsigned NOT NULL AUTO_INCREMENT,
+  `ticket_no`    varchar(64)     NOT NULL,
+  `user_id`      bigint unsigned NOT NULL,
+  `title`        varchar(255)    NOT NULL,
+  `category`     varchar(64)     DEFAULT NULL,
+  `priority`     tinyint         NOT NULL DEFAULT 1 COMMENT '1低 2中 3高',
+  `status`       tinyint         NOT NULL DEFAULT 1 COMMENT '1待处理 2处理中 3已解决 4已关闭',
+  `assigned_to`  bigint unsigned DEFAULT NULL,
+  `created_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at`   datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_ticket_no` (`ticket_no`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工单';
+```
+
+14.2 ticket_replies 工单回复
+
+```sql
+CREATE TABLE `ticket_replies` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `ticket_id`   bigint unsigned NOT NULL,
+  `user_id`     bigint unsigned NOT NULL,
+  `content`     text            NOT NULL,
+  `attachments` json            DEFAULT NULL,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_ticket_id` (`ticket_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='工单回复';
+```
+
+14.3 notices 公告
+
+```sql
+CREATE TABLE `notices` (
+  `id`         bigint unsigned NOT NULL AUTO_INCREMENT,
+  `title`      varchar(255)    NOT NULL,
+  `content`    text            NOT NULL,
+  `type`       tinyint         NOT NULL DEFAULT 1 COMMENT '1系统公告 2维护公告 3活动',
+  `status`     tinyint         NOT NULL DEFAULT 1,
+  `start_at`   datetime        DEFAULT NULL,
+  `end_at`     datetime        DEFAULT NULL,
+  `created_at` datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_status` (`status`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='公告';
+```
+
+14.4 help_docs 帮助文档
+
+```sql
+CREATE TABLE `help_docs` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `category_id` bigint unsigned DEFAULT NULL,
+  `title`       varchar(255)    NOT NULL,
+  `content`     text            NOT NULL,
+  `sort`        int             NOT NULL DEFAULT 0,
+  `status`      tinyint         NOT NULL DEFAULT 1,
+  `updated_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_category_id` (`category_id`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='帮助文档';
+```
+
+---
+
+15. 审计模块
+
+15.1 audit_logs 操作审计
+
+```sql
+CREATE TABLE `audit_logs` (
+  `id`          bigint unsigned NOT NULL AUTO_INCREMENT,
+  `user_id`     bigint unsigned DEFAULT NULL,
+  `role_type`   tinyint         DEFAULT NULL,
+  `module`      varchar(64)     NOT NULL COMMENT '模块',
+  `action`      varchar(64)     NOT NULL COMMENT '动作',
+  `target_type` varchar(64)     DEFAULT NULL,
+  `target_id`   bigint unsigned DEFAULT NULL,
+  `before`      json            DEFAULT NULL,
+  `after`       json            DEFAULT NULL,
+  `ip`          varchar(64)     DEFAULT NULL,
+  `ua`          varchar(512)    DEFAULT NULL,
+  `created_at`  datetime        NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_user_id` (`user_id`),
+  KEY `idx_module` (`module`),
+  KEY `idx_created_at` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='操作审计'
+PARTITION BY RANGE (TO_DAYS(created_at)) (
+  PARTITION p202501 VALUES LESS THAN (TO_DAYS('2025-02-01')),
+  PARTITION p202502 VALUES LESS THAN (TO_DAYS('2025-03-01')),
+  PARTITION pmax VALUES LESS THAN MAXVALUE
+);
+```
+
+---
+
+16. 索引与分区策略
+
+16.1 索引原则
+
+场景 策略
+高频查询 建联合索引，遵循最左前缀
+分页 用 id 或 created_at 做游标
+模糊搜索 前缀匹配走索引，%xxx% 不走
+排序 排序字段入索引
+唯一约束 业务唯一字段建唯一索引
+
+16.2 分区表清单
+
+表 分区键 粒度
+user_login_logs created_at 月
+traffic_usage stat_time 月
+node_metrics stat_time 月
+traffic_stats_hourly stat_time 月
+waf_logs created_at 月
+audit_logs created_at 月
+
+分区维护：
+
+· 用定时任务每月自动创建下月分区
+· 过期分区归档或删除（按保留策略）
+
+16.3 分片预留
+
+users 表预留按 user_id 哈希分片能力：
+
+· 万级用户单表够用
+· 超过 100w 时按 user_id % N 分片
+· 关联表（domains、orders 等）同步分片
+
+---
+
+17. 迁移与种子
+
+17.1 迁移规范
+
+· 用 Prisma Migrate 管理
+· 每次迁移一个文件，命名 YYYYMMDDHHMMSS_description
+· 生产环境迁移前必须备份
+· 大表变更用在线 DDL 工具（pt-online-schema-change / gh-ost）
+
+17.2 种子数据
+
+初始化必须写入：
+
+表 数据
+roles 超管、管理员、运维、用户
+permissions 全部权限点
+role_permissions 角色权限映射
+vendors 阿里云、腾讯云、Cloudflare、AWS
+payment_channels 微信、支付宝、Stripe（禁用状态）
+site_configs 默认站点配置
+system_configs 默认系统配置
+waf_default_rules 默认WAF规则库
+packages 示例套餐
+
+---
+
+18. ER 关系概览
+
+```
+users ──┬── user_roles ── roles ── role_permissions ── permissions
+        ├── user_api_keys
+        ├── user_packages ── packages
+        ├── orders ── order_items
+        ├── domains ──┬── domain_configs
+        │             ├── cache_rules
+        │             ├── origin_groups ── origins
+        │             ├── certificates
+        │             ├── waf_rules
+        │             ├── purge_tasks ── purge_records
+        │             ├── dns_records
+        │             ├── loadbalance_rules
+        │             └── failover_rules
+        ├── tickets ── ticket_replies
+        └── audit_logs
+
+nodes ──┬── node_tokens
+        ├── node_metrics
+        ├── node_configs
+        ├── node_deploy_logs
+        └── node_health_checks
+
+node_groups ── nodes
+            └── loadbalance_rules
+
+vendors ── vendor_accounts ── vendor_resources
+```
+
+---
+
+本文档结束。确认后进入 03-api.md。
+
+---
+
