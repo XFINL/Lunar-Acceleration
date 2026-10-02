@@ -1,0 +1,234 @@
+// Lunar-Acceleration 数据模型
+// 对应设计文档 02-database.md（M1 范围：用户与权限、网站配置、系统配置、审计）
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// 3. 用户与权限模块
+// ============================================================
+
+/// 用户表
+model User {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  username        String    @unique @db.VarChar(64)
+  email           String?   @unique @db.VarChar(128)
+  phone           String?   @db.VarChar(32)
+  passwordHash    String    @map("password_hash") @db.VarChar(255)
+  nickname        String?   @db.VarChar(64)
+  avatar          String?   @db.VarChar(255)
+  /// 0禁用 1正常 2待审核
+  status          Int       @default(1) @db.TinyInt
+  /// 1用户 2管理员 3超管
+  roleType        Int       @default(1) @map("role_type") @db.TinyInt
+  balance         Decimal   @default(0.00) @db.Decimal(12, 2)
+  packageId       BigInt?   @map("package_id") @db.UnsignedBigInt
+  packageExpireAt DateTime? @map("package_expire_at") @db.DateTime
+  inviteCode      String?   @unique @map("invite_code") @db.VarChar(32)
+  inviterId       BigInt?   @map("inviter_id") @db.UnsignedBigInt
+  twoFaSecret     String?   @map("two_fa_secret") @db.VarChar(64)
+  lastLoginAt     DateTime? @map("last_login_at") @db.DateTime
+  lastLoginIp     String?   @map("last_login_ip") @db.VarChar(64)
+  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime
+  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  deletedAt       DateTime? @map("deleted_at") @db.DateTime
+
+  userRoles  UserRole[]
+  apiKeys    UserApiKey[]
+  loginLogs  UserLoginLog[]
+  balances   UserBalance[]
+  auditLogs  AuditLog[]
+
+  @@index([status])
+  @@index([packageId])
+  @@index([createdAt])
+  @@map("users")
+}
+
+/// 角色表
+model Role {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String   @db.VarChar(64)
+  code        String   @unique @db.VarChar(64)
+  description String?  @db.VarChar(255)
+  /// 1系统内置 0自定义
+  isSystem    Int      @default(0) @map("is_system") @db.TinyInt
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
+
+  permissions RolePermission[]
+  users       UserRole[]
+
+  @@map("roles")
+}
+
+/// 权限点表
+model Permission {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name      String   @db.VarChar(64)
+  /// 如 domain:create
+  code      String   @unique @db.VarChar(128)
+  resource  String   @db.VarChar(64)
+  action    String   @db.VarChar(32)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+
+  roles RolePermission[]
+
+  @@index([resource])
+  @@map("permissions")
+}
+
+/// 角色权限关联
+model RolePermission {
+  roleId       BigInt @map("role_id") @db.UnsignedBigInt
+  permissionId BigInt @map("permission_id") @db.UnsignedBigInt
+
+  role       Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
+  @@index([permissionId])
+  @@map("role_permissions")
+}
+
+/// 用户角色关联
+model UserRole {
+  userId BigInt @map("user_id") @db.UnsignedBigInt
+  roleId BigInt @map("role_id") @db.UnsignedBigInt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [roleId], references: [id], onDelete: Cascade)
+
+  @@id([userId, roleId])
+  @@index([roleId])
+  @@map("user_roles")
+}
+
+/// 用户 API 密钥
+model UserApiKey {
+  id         BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId     BigInt    @map("user_id") @db.UnsignedBigInt
+  name       String    @db.VarChar(64)
+  accessKey  String    @unique @map("access_key") @db.VarChar(64)
+  /// Secret Key（加密存储）
+  secretKey  String    @map("secret_key") @db.VarChar(128)
+  /// 0禁用 1启用
+  status     Int       @default(1) @db.TinyInt
+  expireAt   DateTime? @map("expire_at") @db.DateTime
+  lastUsedAt DateTime? @map("last_used_at") @db.DateTime
+  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("user_api_keys")
+}
+
+/// 登录日志
+model UserLoginLog {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId    BigInt?  @map("user_id") @db.UnsignedBigInt
+  username  String?  @db.VarChar(64)
+  ip        String   @db.VarChar(64)
+  region    String?  @db.VarChar(64)
+  ua        String?  @db.VarChar(512)
+  /// 1成功 0失败
+  status    Int      @db.TinyInt
+  message   String?  @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_login_logs")
+}
+
+/// 余额流水
+model UserBalance {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId       BigInt   @map("user_id") @db.UnsignedBigInt
+  /// 1充值 2消费 3退款 4管理员调整
+  type         Int      @db.TinyInt
+  /// 变动金额，正负
+  amount       Decimal  @db.Decimal(12, 2)
+  balanceAfter Decimal  @map("balance_after") @db.Decimal(12, 2)
+  refType      String?  @map("ref_type") @db.VarChar(32)
+  refId        BigInt?  @map("ref_id") @db.UnsignedBigInt
+  remark       String?  @db.VarChar(255)
+  operatorId   BigInt?  @map("operator_id") @db.UnsignedBigInt
+  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@map("user_balances")
+}
+
+// ============================================================
+// 12. 网站配置模块
+// ============================================================
+
+/// 网站配置（KV 结构，按 group 分组）
+model SiteConfig {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  groupKey    String   @map("group_key") @db.VarChar(64)
+  configKey   String   @map("config_key") @db.VarChar(128)
+  configValue Json?    @map("config_value")
+  description String?  @db.VarChar(255)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+
+  @@unique([groupKey, configKey], name: "uk_group_key")
+  @@index([groupKey])
+  @@map("site_configs")
+}
+
+// ============================================================
+// 13. 系统配置模块
+// ============================================================
+
+/// 系统配置
+model SystemConfig {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  groupKey    String   @map("group_key") @db.VarChar(64)
+  configKey   String   @map("config_key") @db.VarChar(128)
+  configValue Json?    @map("config_value")
+  description String?  @db.VarChar(255)
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+
+  @@unique([groupKey, configKey], name: "uk_group_key")
+  @@map("system_configs")
+}
+
+// ============================================================
+// 15. 审计模块
+// ============================================================
+
+/// 操作审计
+model AuditLog {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId     BigInt?  @map("user_id") @db.UnsignedBigInt
+  roleType   Int?     @map("role_type") @db.TinyInt
+  module     String   @db.VarChar(64)
+  action     String   @db.VarChar(64)
+  targetType String?  @map("target_type") @db.VarChar(64)
+  targetId   BigInt?  @map("target_id") @db.UnsignedBigInt
+  before     Json?
+  after      Json?
+  ip         String?  @db.VarChar(64)
+  ua         String?  @db.VarChar(512)
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([module])
+  @@index([createdAt])
+  @@map("audit_logs")
+}

@@ -1,0 +1,35 @@
+{
+  "name": "lunar-acceleration",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Lunar-Acceleration — 一个更简单现代的 CDN 加速控制面板",
+  "license": "Apache-2.0",
+  "packageManager": "pnpm@10.5.2",
+  "engines": {
+    "node": ">=20"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@nestjs/core",
+      "@prisma/client",
+      "@prisma/engines",
+      "esbuild",
+      "prisma"
+    ]
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel dev",
+    "dev:server": "pnpm --filter @lunar/server dev",
+    "dev:web": "pnpm --filter @lunar/web dev",
+    "build": "pnpm -r build",
+    "build:shared": "pnpm --filter @lunar/shared build",
+    "build:server": "pnpm --filter @lunar/server build",
+    "build:web": "pnpm --filter @lunar/web build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @lunar/server prisma:generate",
+    "db:migrate": "pnpm --filter @lunar/server prisma:migrate",
+    "db:deploy": "pnpm --filter @lunar/server prisma:deploy",
+    "db:seed": "pnpm --filter @lunar/server prisma:seed"
+  }
+}
