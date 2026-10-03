@@ -51,6 +51,26 @@ const SITE_CONFIGS: SiteConfigItem[] = [
   // 开放 API
   { groupKey: 'openapi', configKey: 'enabled', configValue: false, description: '是否开放 API' },
   { groupKey: 'openapi', configKey: 'rateLimit', configValue: 60, description: 'API 限流(次/分钟)' },
+
+  // 邮件配置
+  { groupKey: 'email', configKey: 'host', configValue: '', description: 'SMTP 服务器地址' },
+  { groupKey: 'email', configKey: 'port', configValue: 465, description: 'SMTP 端口' },
+  { groupKey: 'email', configKey: 'secure', configValue: true, description: '是否使用 SSL/TLS' },
+  { groupKey: 'email', configKey: 'user', configValue: '', description: 'SMTP 账号' },
+  { groupKey: 'email', configKey: 'pass', configValue: '', description: 'SMTP 密码 / 授权码' },
+  { groupKey: 'email', configKey: 'from', configValue: '', description: '发件人，留空取账号' },
+
+  // 短信配置
+  {
+    groupKey: 'sms',
+    configKey: 'provider',
+    configValue: '',
+    description: '服务商：aliyun / tencent',
+  },
+  { groupKey: 'sms', configKey: 'signName', configValue: '', description: '短信签名' },
+  { groupKey: 'sms', configKey: 'templateCode', configValue: '', description: '模板编码' },
+  { groupKey: 'sms', configKey: 'accessKeyId', configValue: '', description: 'AccessKey ID' },
+  { groupKey: 'sms', configKey: 'accessKeySecret', configValue: '', description: 'AccessKey Secret' },
 ]
 
 export async function seedSiteConfigs(prisma: PrismaClient): Promise<number> {

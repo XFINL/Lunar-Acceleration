@@ -157,4 +157,22 @@ export const adminApi = {
   getSystemConfig: () => request.get<{ items: SiteConfigVo[] }>('/admin/system-config'),
   updateSystemConfig: (group: string, items: ConfigItemPayload[]) =>
     request.put<{ count: number }>(`/admin/system-config/${group}`, { items }),
+
+  // M2 站点配置 - 上传与测试
+  uploadSiteConfigFile: (file: File, type = 'site') => {
+    const formData = new FormData()
+    formData.append('file', file)
+    formData.append('type', type)
+    return request.post<{ path: string; url: string; size: number }>(
+      '/admin/site-config/upload',
+      formData,
+    )
+  },
+  testEmail: (to: string) =>
+    request.post<{ to: string; messageId: string }>('/admin/site-config/test-email', { to }),
+  testSms: (to: string) =>
+    request.post<{ phone: string; provider: string; simulated: boolean }>(
+      '/admin/site-config/test-sms',
+      { to },
+    ),
 }

@@ -74,6 +74,9 @@ services:
         condition: service_healthy
     ports:
       - "${SERVER_PORT:-3000}:3000"
+    volumes:
+      # 上传文件持久化（LocalStorageService 的存储根目录）
+      - uploads-data:/app/apps/server/uploads
 
   web:
     build:
@@ -89,3 +92,4 @@ services:
 volumes:
   mysql-data:
   redis-data:
+  uploads-data:

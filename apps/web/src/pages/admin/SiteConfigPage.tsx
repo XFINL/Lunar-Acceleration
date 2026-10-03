@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState, type ChangeEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { toast } from 'sonner'
@@ -47,12 +47,24 @@ function resolveValue(original: unknown, edited: unknown): unknown {
   return typeof edited === 'string' ? edited : String(edited)
 }
 
+const UPLOADABLE_KEYS = new Set(['logo', 'favicon'])
+
+export interface ConfigGroupAction {
+  label: string
+  placeholder: string
+  run: (value: string) => Promise<string>
+}
+
 export interface ConfigEditorProps {
   title: string
   description: string
   queryKey: string
   fetchConfig: () => Promise<{ items: SiteConfigVo[] }>
   updateConfig: (group: string, items: ConfigItemPayload[]) => Promise<{ count: number }>
+  /** 上传文件并返回可访问 URL（用于 logo / favicon 等） */
+  uploadFile?: (file: File) => Promise<{ url: string }>
+  /** 分组级测试动作，键为分组名 */
+  groupActions?: Record<string, ConfigGroupAction>
 }
 
 /** 分组 KV 配置编辑器（站点配置 / 系统配置共用） */
@@ -62,12 +74,17 @@ export function ConfigEditor({
   queryKey,
   fetchConfig,
   updateConfig,
+  uploadFile,
+  groupActions,
 }: ConfigEditorProps) {
   const { t } = useTranslation()
   const queryClient = useQueryClient()
 
   const [activeGroup, setActiveGroup] = useState('')
   const [edits, setEdits] = useState<Record<string, unknown>>({})
+  const [actionInput, setActionInput] = useState('')
+  const [uploadingKey, setUploadingKey] = useState<string | null>(null)
+  const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const { data, isLoading } = useQuery({ queryKey: ['admin', queryKey], queryFn: fetchConfig })
 
@@ -105,8 +122,39 @@ export function ConfigEditor({
       toast.error(error instanceof ApiError ? error.message : t('common.failed')),
   })
 
+  const action = groupActions?.[currentGroup]
+
+  const actionMutation = useMutation({
+    mutationFn: () => {
+      if (!action) throw new ApiError(0, t('common.failed'))
+      return action.run(actionInput)
+    },
+    onSuccess: (message) => {
+      toast.success(message || t('common.success'))
+      setActionInput('')
+    },
+    onError: (error) =>
+      toast.error(error instanceof ApiError ? error.message : t('common.failed')),
+  })
+
   const setEdit = (key: string, value: unknown) =>
     setEdits((prev) => ({ ...prev, [key]: value }))
+
+  const handleUpload = async (key: string, event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file || !uploadFile) return
+    setUploadingKey(key)
+    try {
+      const { url } = await uploadFile(file)
+      setEdit(key, url)
+      toast.success(t('admin.uploadSuccess'))
+    } catch (error) {
+      toast.error(error instanceof ApiError ? error.message : t('common.failed'))
+    } finally {
+      setUploadingKey(null)
+    }
+  }
 
   return (
     <div>
@@ -128,17 +176,37 @@ export function ConfigEditor({
               onValueChange={(value) => {
                 setActiveGroup(value)
                 setEdits({})
+                setActionInput('')
               }}
               items={groups.map((group) => ({ value: group.key, label: group.key }))}
             />
-            <Button
-              disabled={changedCount === 0 || saveMutation.isPending}
-              onClick={() => saveMutation.mutate()}
-            >
-              {changedCount > 0
-                ? t('admin.saveChanges', { count: changedCount })
-                : t('admin.noChanges')}
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {action ? (
+                <>
+                  <Input
+                    className="w-56"
+                    placeholder={action.placeholder}
+                    value={actionInput}
+                    onChange={(event) => setActionInput(event.target.value)}
+                  />
+                  <Button
+                    variant="outline"
+                    disabled={!actionInput || actionMutation.isPending}
+                    onClick={() => actionMutation.mutate()}
+                  >
+                    {action.label}
+                  </Button>
+                </>
+              ) : null}
+              <Button
+                disabled={changedCount === 0 || saveMutation.isPending}
+                onClick={() => saveMutation.mutate()}
+              >
+                {changedCount > 0
+                  ? t('admin.saveChanges', { count: changedCount })
+                  : t('admin.noChanges')}
+              </Button>
+            </div>
           </div>
 
           <Card>
@@ -177,10 +245,33 @@ export function ConfigEditor({
                           onChange={(event) => setEdit(item.configKey, event.target.value)}
                         />
                       ) : (
-                        <Input
-                          value={serialize(current)}
-                          onChange={(event) => setEdit(item.configKey, event.target.value)}
-                        />
+                        <div className="flex items-center gap-2">
+                          <Input
+                            value={serialize(current)}
+                            onChange={(event) => setEdit(item.configKey, event.target.value)}
+                          />
+                          {uploadFile && UPLOADABLE_KEYS.has(item.configKey) ? (
+                            <>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                disabled={uploadingKey === item.configKey}
+                                onClick={() => fileInputRefs.current[item.configKey]?.click()}
+                              >
+                                {t('admin.upload')}
+                              </Button>
+                              <input
+                                ref={(element) => {
+                                  fileInputRefs.current[item.configKey] = element
+                                }}
+                                type="file"
+                                accept="image/*"
+                                className="hidden"
+                                onChange={(event) => void handleUpload(item.configKey, event)}
+                              />
+                            </>
+                          ) : null}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -203,6 +294,25 @@ export function SiteConfigPage() {
       queryKey="site-config"
       fetchConfig={adminApi.getSiteConfig}
       updateConfig={adminApi.updateSiteConfig}
+      uploadFile={adminApi.uploadSiteConfigFile}
+      groupActions={{
+        email: {
+          label: t('admin.testEmail'),
+          placeholder: t('admin.emailPlaceholder'),
+          run: async (to) => {
+            const result = await adminApi.testEmail(to)
+            return t('admin.testEmailSent', { to: result.to })
+          },
+        },
+        sms: {
+          label: t('admin.testSms'),
+          placeholder: t('admin.smsPlaceholder'),
+          run: async (to) => {
+            const result = await adminApi.testSms(to)
+            return result.simulated ? t('admin.testSmsSimulated') : t('admin.testSmsSent', { to })
+          },
+        },
+      }}
     />
   )
 }

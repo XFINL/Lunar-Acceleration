@@ -2,14 +2,16 @@ import 'reflect-metadata'
 import { Logger, ValidationPipe } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
 import { NestFactory } from '@nestjs/core'
+import type { NestExpressApplication } from '@nestjs/platform-express'
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger'
 import cookieParser from 'cookie-parser'
 import helmet from 'helmet'
+import { join } from 'node:path'
 import { AppModule } from './app.module'
 import type { AppConfig } from './config/configuration'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create(AppModule, { bufferLogs: true })
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true })
   const configService = app.get(ConfigService)
   const appConfig = configService.get<AppConfig>('app')!
 
@@ -19,6 +21,9 @@ async function bootstrap(): Promise<void> {
     origin: appConfig.corsOrigins,
     credentials: true,
   })
+
+  // 上传文件静态托管（与 LocalStorageService 的存储根目录一致）
+  app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads/' })
 
   app.setGlobalPrefix('api/v1')
   app.useGlobalPipes(
