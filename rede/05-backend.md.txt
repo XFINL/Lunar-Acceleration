@@ -1,0 +1,1658 @@
+05-backend.md
+
+```markdown
+# CDN 加速控制面板 — 后端设计
+
+> 版本：v0.1
+> 框架：NestJS + TypeScript
+> ORM：Prisma
+> 数据库：MySQL 8
+> 缓存/队列：Redis + BullMQ
+
+---
+
+## 1. 技术选型
+
+### 1.1 核心依赖
+
+| 类别 | 选型 | 说明 |
+|------|------|------|
+| 框架 | NestJS 10 | 模块化、依赖注入 |
+| 语言 | TypeScript 5 | 严格模式 |
+| ORM | Prisma 5 | 类型安全 |
+| 数据库 | MySQL 8 | 主数据 |
+| 缓存 | Redis 7 | 会话、缓存、队列 |
+| 队列 | BullMQ | 异步任务 |
+| 认证 | @nestjs/jwt + passport | JWT |
+| 校验 | class-validator + class-transformer | DTO 校验 |
+| 文档 | @nestjs/swagger | API 文档 |
+| 实时 | @nestjs/websockets + socket.io | WebSocket |
+| 定时 | @nestjs/schedule | Cron |
+| HTTP | @nestjs/axios | 调外部 API |
+| 日志 | winston + nest-winston | 结构化日志 |
+| 加密 | bcrypt + crypto | 密码、密钥 |
+| 邮件 | nodemailer | 邮件 |
+| 短信 | 阿里云/腾讯云 SDK | 短信 |
+| 验证码 | svg-captcha | 图形验证码 |
+| 限流 | @nestjs/throttler | 接口限流 |
+| 队列面板 | @bull-board/nestjs | 队列监控 |
+
+### 1.2 开发依赖
+
+| 类别 | 选型 |
+|------|------|
+| 包管理 | pnpm |
+| Monorepo | pnpm workspace |
+| 类型检查 | tsc |
+| 测试 | Jest + Supertest |
+| 代码规范 | ESLint + Prettier |
+| Git Hook | husky + lint-staged |
+| 提交规范 | commitlint |
+
+---
+
+## 2. 目录结构
+```
+
+apps/server/
+├── prisma/
+│   ├── schema.prisma               # 数据模型
+│   ├── migrations/                 # 迁移文件
+│   └── seeds/                      # 种子数据
+│       ├── index.ts
+│       ├── roles.seed.ts
+│       ├── permissions.seed.ts
+│       ├── vendors.seed.ts
+│       ├── site-configs.seed.ts
+│       ├── system-configs.seed.ts
+│       └── waf-rules.seed.ts
+│
+├── src/
+│   ├── modules/
+│   │   ├── auth/                   # 认证
+│   │   │   ├── auth.module.ts
+│   │   │   ├── auth.controller.ts
+│   │   │   ├── auth.service.ts
+│   │   │   ├── strategies/
+│   │   │   │   ├── jwt.strategy.ts
+│   │   │   │   ├── jwt-refresh.strategy.ts
+│   │   │   │   └── local.strategy.ts
+│   │   │   ├── guards/
+│   │   │   │   ├── jwt-auth.guard.ts
+│   │   │   │   ├── roles.guard.ts
+│   │   │   │   └── permissions.guard.ts
+│   │   │   ├── decorators/
+│   │   │   │   ├── current-user.decorator.ts
+│   │   │   │   ├── roles.decorator.ts
+│   │   │   │   ├── permissions.decorator.ts
+│   │   │   │   └── public.decorator.ts
+│   │   │   ├── dto/
+│   │   │   │   ├── login.dto.ts
+│   │   │   │   ├── register.dto.ts
+│   │   │   │   ├── refresh.dto.ts
+│   │   │   │   └── reset-password.dto.ts
+│   │   │   └── interfaces/
+│   │   │       └── jwt-payload.interface.ts
+│   │   │
+│   │   ├── user/                   # 用户
+│   │   │   ├── user.module.ts
+│   │   │   ├── user.controller.ts
+│   │   │   ├── user.service.ts
+│   │   │   ├── user.repository.ts
+│   │   │   ├── dto/
+│   │   │   └── entities/
+│   │   │
+│   │   ├── rbac/                   # 权限
+│   │   │   ├── rbac.module.ts
+│   │   │   ├── role.controller.ts
+│   │   │   ├── role.service.ts
+│   │   │   ├── permission.controller.ts
+│   │   │   ├── permission.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── domain/                 # 域名
+│   │   │   ├── domain.module.ts
+│   │   │   ├── domain.controller.ts
+│   │   │   ├── domain.service.ts
+│   │   │   ├── domain.repository.ts
+│   │   │   ├── domain-audit.controller.ts
+│   │   │   ├── dto/
+│   │   │   └── events/
+│   │   │       └── domain-created.event.ts
+│   │   │
+│   │   ├── cache-rule/             # 缓存规则
+│   │   │   ├── cache-rule.module.ts
+│   │   │   ├── cache-rule.controller.ts
+│   │   │   ├── cache-rule.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── origin/                 # 回源
+│   │   │   ├── origin.module.ts
+│   │   │   ├── origin.controller.ts
+│   │   │   ├── origin.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── certificate/            # 证书
+│   │   │   ├── certificate.module.ts
+│   │   │   ├── certificate.controller.ts
+│   │   │   ├── certificate.service.ts
+│   │   │   ├── acme.service.ts     # 自动申请
+│   │   │   └── dto/
+│   │   │
+│   │   ├── purge/                  # 刷新预热
+│   │   │   ├── purge.module.ts
+│   │   │   ├── purge.controller.ts
+│   │   │   ├── purge.service.ts
+│   │   │   ├── purge.processor.ts  # BullMQ 处理器
+│   │   │   └── dto/
+│   │   │
+│   │   ├── access-control/         # 访问控制
+│   │   │   ├── access-control.module.ts
+│   │   │   ├── access-control.controller.ts
+│   │   │   ├── access-control.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── waf/                    # WAF
+│   │   │   ├── waf.module.ts
+│   │   │   ├── waf-rule.controller.ts
+│   │   │   ├── waf-rule.service.ts
+│   │   │   ├── waf-default.controller.ts
+│   │   │   ├── waf-default.service.ts
+│   │   │   ├── waf-log.controller.ts
+│   │   │   ├── waf-log.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── statistics/             # 统计
+│   │   │   ├── statistics.module.ts
+│   │   │   ├── statistics.controller.ts
+│   │   │   ├── statistics.service.ts
+│   │   │   ├── aggregation/        # 聚合任务
+│   │   │   │   ├── hourly.processor.ts
+│   │   │   │   ├── daily.processor.ts
+│   │   │   │   └── cleanup.processor.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── log/                    # 日志
+│   │   │   ├── log.module.ts
+│   │   │   ├── log.controller.ts
+│   │   │   ├── log.service.ts
+│   │   │   ├── realtime.gateway.ts # WebSocket
+│   │   │   ├── delivery.service.ts # 日志投递
+│   │   │   └── dto/
+│   │   │
+│   │   ├── package/                # 套餐
+│   │   │   ├── package.module.ts
+│   │   │   ├── package.controller.ts
+│   │   │   ├── package.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── order/                  # 订单
+│   │   │   ├── order.module.ts
+│   │   │   ├── order.controller.ts
+│   │   │   ├── order.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── payment/                # 支付（占位）
+│   │   │   ├── payment.module.ts
+│   │   │   ├── payment.controller.ts
+│   │   │   ├── payment.service.ts
+│   │   │   ├── channels/
+│   │   │   │   ├── base.channel.ts
+│   │   │   │   ├── wechat.channel.ts
+│   │   │   │   ├── alipay.channel.ts
+│   │   │   │   └── stripe.channel.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── traffic/                # 流量用量
+│   │   │   ├── traffic.module.ts
+│   │   │   ├── traffic.service.ts
+│   │   │   └── traffic.processor.ts
+│   │   │
+│   │   ├── node/                   # 节点
+│   │   │   ├── node.module.ts
+│   │   │   ├── node.controller.ts
+│   │   │   ├── node.service.ts
+│   │   │   ├── node-group.controller.ts
+│   │   │   ├── node-group.service.ts
+│   │   │   ├── node-communication.controller.ts # 节点→控制端
+│   │   │   ├── node-push.service.ts              # 控制端→节点
+│   │   │   ├── node-deploy.service.ts            # 部署脚本生成
+│   │   │   ├── node-monitor.service.ts
+│   │   │   ├── node-health.service.ts
+│   │   │   ├── dto/
+│   │   │   └── guards/
+│   │   │       └── node-token.guard.ts
+│   │   │
+│   │   ├── vendor/                 # 厂商
+│   │   │   ├── vendor.module.ts
+│   │   │   ├── vendor.controller.ts
+│   │   │   ├── vendor.service.ts
+│   │   │   ├── vendor-account.controller.ts
+│   │   │   ├── vendor-account.service.ts
+│   │   │   ├── drivers/
+│   │   │   │   ├── base.driver.ts
+│   │   │   │   ├── ali.driver.ts
+│   │   │   │   ├── tencent.driver.ts
+│   │   │   │   ├── cloudflare.driver.ts
+│   │   │   │   ├── aws.driver.ts
+│   │   │   │   └── driver.factory.ts
+│   │   │   ├── sync.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── schedule/               # 调度
+│   │   │   ├── schedule.module.ts
+│   │   │   ├── policy.controller.ts
+│   │   │   ├── policy.service.ts
+│   │   │   ├── loadbalance.controller.ts
+│   │   │   ├── loadbalance.service.ts
+│   │   │   ├── failover.controller.ts
+│   │   │   ├── failover.service.ts
+│   │   │   ├── dns.service.ts
+│   │   │   ├── failover.processor.ts # 健康检查
+│   │   │   └── dto/
+│   │   │
+│   │   ├── ticket/                 # 工单
+│   │   │   ├── ticket.module.ts
+│   │   │   ├── ticket.controller.ts
+│   │   │   ├── ticket.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── notice/                 # 公告
+│   │   │   ├── notice.module.ts
+│   │   │   ├── notice.controller.ts
+│   │   │   ├── notice.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── help-doc/               # 帮助文档
+│   │   │   ├── help-doc.module.ts
+│   │   │   ├── help-doc.controller.ts
+│   │   │   ├── help-doc.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── site-config/            # 网站配置
+│   │   │   ├── site-config.module.ts
+│   │   │   ├── site-config.controller.ts
+│   │   │   ├── site-config.service.ts
+│   │   │   ├── site-config-public.controller.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── system-config/          # 系统配置
+│   │   │   ├── system-config.module.ts
+│   │   │   ├── system-config.controller.ts
+│   │   │   ├── system-config.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── alarm/                  # 告警
+│   │   │   ├── alarm.module.ts
+│   │   │   ├── alarm-rule.controller.ts
+│   │   │   ├── alarm-rule.service.ts
+│   │   │   ├── alarm-record.controller.ts
+│   │   │   ├── alarm-record.service.ts
+│   │   │   ├── alarm.processor.ts
+│   │   │   ├── channels/
+│   │   │   │   ├── email.channel.ts
+│   │   │   │   ├── sms.channel.ts
+│   │   │   │   └── webhook.channel.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── audit/                  # 审计
+│   │   │   ├── audit.module.ts
+│   │   │   ├── audit.controller.ts
+│   │   │   ├── audit.service.ts
+│   │   │   ├── audit.interceptor.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── report/                 # 报表
+│   │   │   ├── report.module.ts
+│   │   │   ├── report.controller.ts
+│   │   │   ├── report.service.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── notification/           # 通知
+│   │   │   ├── notification.module.ts
+│   │   │   ├── notification.gateway.ts
+│   │   │   └── notification.service.ts
+│   │   │
+│   │   ├── upload/                 # 文件上传
+│   │   │   ├── upload.module.ts
+│   │   │   ├── upload.controller.ts
+│   │   │   ├── upload.service.ts
+│   │   │   └── storage/
+│   │   │       ├── local.storage.ts
+│   │   │       ├── oss.storage.ts
+│   │   │       └── s3.storage.ts
+│   │   │
+│   │   ├── mail/                   # 邮件
+│   │   │   ├── mail.module.ts
+│   │   │   ├── mail.service.ts
+│   │   │   └── templates/
+│   │   │
+│   │   ├── sms/                    # 短信
+│   │   │   ├── sms.module.ts
+│   │   │   ├── sms.service.ts
+│   │   │   └── providers/
+│   │   │
+│   │   ├── oauth/                  # 第三方登录
+│   │   │   ├── oauth.module.ts
+│   │   │   ├── oauth.controller.ts
+│   │   │   ├── oauth.service.ts
+│   │   │   └── providers/
+│   │   │       ├── wechat.provider.ts
+│   │   │       ├── qq.provider.ts
+│   │   │       ├── github.provider.ts
+│   │   │       └── google.provider.ts
+│   │   │
+│   │   ├── openapi/                # 对外API
+│   │   │   ├── openapi.module.ts
+│   │   │   ├── openapi.controller.ts
+│   │   │   ├── openapi.service.ts
+│   │   │   ├── guards/
+│   │   │   │   └── signature.guard.ts
+│   │   │   └── dto/
+│   │   │
+│   │   ├── webhook/                # 回调
+│   │   │   ├── webhook.module.ts
+│   │   │   ├── webhook.controller.ts
+│   │   │   └── dto/
+│   │   │
+│   │   └── health/                 # 健康检查
+│   │       ├── health.module.ts
+│   │       └── health.controller.ts
+│   │
+│   ├── common/
+│   │   ├── decorators/
+│   │   │   ├── current-user.decorator.ts
+│   │   │   ├── roles.decorator.ts
+│   │   │   ├── permissions.decorator.ts
+│   │   │   ├── public.decorator.ts
+│   │   │   └── api-paginated.decorator.ts
+│   │   ├── guards/
+│   │   │   ├── jwt-auth.guard.ts
+│   │   │   ├── roles.guard.ts
+│   │   │   ├── permissions.guard.ts
+│   │   │   └── node-token.guard.ts
+│   │   ├── interceptors/
+│   │   │   ├── transform.interceptor.ts    # 统一响应
+│   │   │   ├── logging.interceptor.ts
+│   │   │   ├── audit.interceptor.ts
+│   │   │   └── timeout.interceptor.ts
+│   │   ├── filters/
+│   │   │   ├── http-exception.filter.ts
+│   │   │   ├── prisma-exception.filter.ts
+│   │   │   └── all-exceptions.filter.ts
+│   │   ├── pipes/
+│   │   │   ├── validation.pipe.ts
+│   │   │   └── parse-int.pipe.ts
+│   │   ├── middleware/
+│   │   │   ├── logger.middleware.ts
+│   │   │   └── request-id.middleware.ts
+│   │   ├── dto/
+│   │   │   ├── pagination.dto.ts
+│   │   │   └── response.dto.ts
+│   │   ├── constants/
+│   │   │   ├── error-code.constant.ts
+│   │   │   ├── permission.constant.ts
+│   │   │   └── role.constant.ts
+│   │   └── utils/
+│   │       ├── crypto.util.ts
+│   │       ├── hmac.util.ts
+│   │       ├── ip.util.ts
+│   │       ├── domain.util.ts
+│   │       └── date.util.ts
+│   │
+│   ├── config/
+│   │   ├── app.config.ts
+│   │   ├── database.config.ts
+│   │   ├── redis.config.ts
+│   │   ├── jwt.config.ts
+│   │   ├── mail.config.ts
+│   │   ├── sms.config.ts
+│   │   ├── storage.config.ts
+│   │   └── configuration.ts
+│   │
+│   ├── database/
+│   │   ├── prisma.module.ts
+│   │   ├── prisma.service.ts
+│   │   └── prisma.middleware.ts
+│   │
+│   ├── queue/
+│   │   ├── queue.module.ts
+│   │   ├── queue.constants.ts
+│   │   ├── processors/
+│   │   │   ├── purge.processor.ts
+│   │   │   ├── traffic.processor.ts
+│   │   │   ├── statistics.processor.ts
+│   │   │   ├── alarm.processor.ts
+│   │   │   ├── node-push.processor.ts
+│   │   │   ├── failover.processor.ts
+│   │   │   ├── cert-renew.processor.ts
+│   │   │   ├── log-delivery.processor.ts
+│   │   │   └── cleanup.processor.ts
+│   │   └── schedulers/
+│   │       ├── traffic-aggregate.scheduler.ts
+│   │       ├── cert-check.scheduler.ts
+│   │       ├── package-expire.scheduler.ts
+│   │       ├── node-health.scheduler.ts
+│   │       └── partition.scheduler.ts
+│   │
+│   ├── shared/
+│   │   ├── i18n/
+│   │   │   ├── i18n.module.ts
+│   │   │   ├── i18n.service.ts
+│   │   │   └── locales/
+│   │   │       ├── zh-TW.json
+│   │   │       ├── en.json
+│   │   │       ├── jp.json
+│   │   │       └── de.json
+│   │   ├── logger/
+│   │   │   └── logger.service.ts
+│   │   ├── redis/
+│   │   │   ├── redis.module.ts
+│   │   │   └── redis.service.ts
+│   │   └── events/
+│   │       ├── event.module.ts
+│   │       └── event.service.ts
+│   │
+│   ├── app.module.ts
+│   ├── app.controller.ts
+│   ├── app.service.ts
+│   └── main.ts
+│
+├── test/
+├── .env.example
+├── nest-cli.json
+├── tsconfig.json
+├── package.json
+└── Dockerfile
+
+```
+---
+
+## 3. 模块划分
+
+### 3.1 模块依赖图
+```
+
+AppModule
+├── ConfigModule (全局)
+├── PrismaModule (全局)
+├── RedisModule (全局)
+├── QueueModule (全局)
+├── I18nModule (全局)
+├── LoggerModule (全局)
+├── EventModule (全局)
+│
+├── AuthModule ──────► UserModule, RbacModule
+├── UserModule ──────► RbacModule
+├── RbacModule
+├── DomainModule ────► CacheRuleModule, OriginModule, CertificateModule
+│                     NodeModule, VendorModule
+├── CacheRuleModule
+├── OriginModule
+├── CertificateModule
+├── PurgeModule ─────► DomainModule, NodeModule, VendorModule
+├── AccessControlModule
+├── WafModule
+├── StatisticsModule
+├── LogModule ───────► NotificationModule
+├── PackageModule
+├── OrderModule ─────► PackageModule, PaymentModule
+├── PaymentModule
+├── TrafficModule
+├── NodeModule ──────► NodeGroupModule, QueueModule
+├── NodeGroupModule
+├── VendorModule
+├── ScheduleModule ──► NodeModule
+├── TicketModule ────► NotificationModule
+├── NoticeModule ────► NotificationModule
+├── HelpDocModule
+├── SiteConfigModule
+├── SystemConfigModule
+├── AlarmModule ─────► NotificationModule, MailModule, SmsModule
+├── AuditModule
+├── ReportModule
+├── NotificationModule
+├── UploadModule
+├── MailModule
+├── SmsModule
+├── OauthModule
+├── OpenapiModule
+├── WebhookModule
+└── HealthModule
+
+```
+### 3.2 核心模块职责
+
+| 模块 | 职责 |
+|------|------|
+| AuthModule | 登录、注册、Token、2FA、OAuth |
+| UserModule | 用户 CRUD、资料、余额 |
+| RbacModule | 角色、权限、守卫 |
+| DomainModule | 域名 CRUD、审核、状态机 |
+| CacheRuleModule | 缓存规则 CRUD、排序 |
+| OriginModule | 源站组、源站、健康检查 |
+| CertificateModule | 证书上传、ACME 自动申请、续期 |
+| PurgeModule | 刷新预热、队列处理 |
+| AccessControlModule | 防盗链、IP/UA 规则 |
+| WafModule | WAF 规则、默认规则库、日志 |
+| StatisticsModule | 统计查询、聚合任务 |
+| LogModule | 日志查询、实时推送、投递 |
+| PackageModule | 套餐 CRUD |
+| OrderModule | 订单、支付流程 |
+| PaymentModule | 支付渠道（占位） |
+| TrafficModule | 流量用量记录、配额检查 |
+| NodeModule | 节点 CRUD、通信、推送、部署、监控 |
+| VendorModule | 厂商、账号、驱动、同步 |
+| ScheduleModule | 调度策略、负载均衡、故障转移 |
+| TicketModule | 工单 |
+| NoticeModule | 公告 |
+| SiteConfigModule | 网站配置 |
+| SystemConfigModule | 系统配置 |
+| AlarmModule | 告警规则、记录、通知 |
+| AuditModule | 操作审计 |
+| ReportModule | 平台报表 |
+| NotificationModule | WebSocket 通知 |
+| OpenapiModule | 对外 API |
+
+---
+
+## 4. 认证与鉴权
+
+### 4.1 JWT 策略
+
+**Access Token：**
+- 有效期：2 小时
+- 载荷：`{ sub: userId, username, roleType, permissions }`
+- 签名：HS256
+
+**Refresh Token：**
+- 有效期：7 天
+- 存 Redis：`refresh:{userId}:{jti}`
+- 刷新时轮换
+
+**JWT Payload：**
+```ts
+interface JwtPayload {
+  sub: number
+  username: string
+  roleType: number
+  permissions: string[]
+  iat: number
+  exp: number
+}
+```
+
+4.2 守卫链
+
+```
+@UseGuards(JwtAuthGuard, RolesGuard, PermissionsGuard)
+```
+
+JwtAuthGuard：
+
+· 校验 Token
+· 注入 req.user
+
+RolesGuard：
+
+· 校验 @Roles('admin')
+
+PermissionsGuard：
+
+· 校验 @RequirePermissions('domain:create')
+
+4.3 装饰器
+
+```ts
+@Public()                          // 免认证
+@Roles('admin', 'super_admin')     // 角色
+@RequirePermissions('domain:create') // 权限
+@CurrentUser() user: User          // 当前用户
+```
+
+4.4 数据范围
+
+· 用户端接口：where: { userId: currentUser.id }
+· 管理员端接口：可指定 userId 查询全部
+· 用 DataScopeGuard 或 Service 层手动控制
+
+4.5 节点 Token 鉴权
+
+NodeTokenGuard：
+
+· 读 Header X-Node-Id、X-Node-Token、X-Timestamp、X-Signature
+· 查 node_tokens 表验证 token
+· 校验时间戳（±300s）
+· 校验 HMAC 签名
+· 防重放：Redis 存 signature，5 分钟过期
+
+4.6 对外 API 签名
+
+SignatureGuard：
+
+· 读 Header X-Access-Key、X-Timestamp、X-Signature
+· 查 user_api_keys 表
+· 按规则拼 stringToSign
+· HMAC-SHA256 校验
+· 限流：Redis 计数
+
+---
+
+5. 核心业务流程
+
+5.1 用户添加域名
+
+```
+1. 用户提交域名 + 源站信息
+2. DomainService.create()
+   ├── 校验域名格式、唯一性
+   ├── 查用户当前套餐
+   ├── 校验配额（域名数、流量）
+   ├── 根据套餐 accessType 决定接入模式
+   │   ├── 自建：分配 nodeGroupId，生成 CNAME
+   │   └── 厂商：调 vendor driver 创建域名
+   ├── 写 domains 表
+   ├── 写 domain_configs 表
+   ├── 写 origin_groups + origins
+   ├── 域名状态：待审核
+   └── 发事件 DomainCreatedEvent
+3. 管理员审核通过
+   ├── 状态 → 部署中
+   ├── 自建：NodePushService.push(domainId) 推送配置到节点
+   ├── 厂商：driver.deploy(domainId)
+   ├── 生成 DNS CNAME 引导
+   └── 状态 → 已启用
+4. 用户配置 CNAME
+5. DomainService.checkCname() 验证
+6. 域名生效
+```
+
+5.2 配置变更推送
+
+```
+1. 用户修改缓存规则
+2. CacheRuleService.update()
+   ├── 写 DB
+   ├── 发事件 ConfigChangedEvent(domainId)
+3. NodePushService 监听事件
+   ├── 查域名归属节点组
+   ├── 生成配置 diff
+   ├── 入队 node-push 任务
+4. NodePushProcessor 消费
+   ├── 遍历节点
+   ├── HTTP POST https://node/config/push
+   ├── 带 X-Node-Token + 签名
+   ├── 成功 → 记录 node_configs
+   └── 失败 → 重试（最多 3 次）
+5. 节点接收 → 写配置 → reload
+```
+
+5.3 刷新预热
+
+```
+1. 用户提交刷新
+2. PurgeService.create()
+   ├── 校验配额
+   ├── 写 purge_tasks
+   ├── 入队 purge 任务
+3. PurgeProcessor 消费
+   ├── 自建：调所有相关节点
+   │   ├── HTTP POST https://node/command
+   │   ├── body: { command: 'purge', urls: [...] }
+   │   └── 节点执行 → 清缓存
+   ├── 厂商：调 driver.purge()
+   ├── 汇总结果
+   └── 更新 purge_tasks + purge_records
+4. 用户查询进度
+```
+
+5.4 流量统计聚合
+
+```
+1. 节点每 5 分钟上报流量
+2. TrafficService.record()
+   ├── 写 traffic_usage（原始）
+   └── 更新 user_packages.traffic_used
+3. StatisticsScheduler 每小时跑
+   ├── 聚合 traffic_usage → traffic_stats_hourly
+   ├── 聚合 region_stats、status_code_stats、top_url_stats
+   └── 入队 daily 任务
+4. 每日凌晨聚合 → traffic_stats_daily
+5. 用户查询统计 → 查聚合表
+```
+
+5.5 套餐过期与配额
+
+```
+1. PackageExpireScheduler 每天跑
+   ├── 查 user_packages 过期
+   ├── 状态 → 过期
+   ├── 用户 package_id 置空
+   ├── 发送通知
+   └── 域名停用（可选）
+2. TrafficService.checkQuota()
+   ├── 每次记录流量后检查
+   ├── 超配额 → 按 over_quota_policy
+   │   ├── 限速：推送到节点
+   │   ├── 按量扣费：扣余额
+   │   └── 停服：域名停用
+   └── 发告警
+```
+
+5.6 证书自动续期
+
+```
+1. CertRenewScheduler 每天跑
+   ├── 查 30 天内到期证书
+   ├── 入队 cert-renew 任务
+2. CertRenewProcessor 消费
+   ├── 调 ACME 申请新证书
+   ├── 更新 certificates
+   ├── 推送到节点
+   └── 发通知
+```
+
+5.7 节点健康检查
+
+```
+1. NodeHealthScheduler 每 30 秒跑
+   ├── 遍历在线节点
+   ├── HTTP POST https://node/health
+   ├── 超时/失败 → 记录
+   ├── 连续失败 3 次 → 标记离线
+   ├── 触发 FailoverService
+   │   ├── 从负载均衡中剔除
+   │   ├── 更新 DNS 解析
+   │   └── 发告警
+   └── 恢复 → 重新加入
+```
+
+---
+
+6. 节点通信
+
+6.1 节点 → 控制端
+
+心跳：
+
+```
+POST /api/v1/node/heartbeat
+Guard: NodeTokenGuard
+Service: NodeService.heartbeat()
+  ├── 更新 nodes.last_heartbeat
+  ├── 更新 status = 在线
+  └── 返回待执行指令
+```
+
+监控上报：
+
+```
+POST /api/v1/node/report-metrics
+Service: NodeMonitorService.record()
+  ├── 写 node_metrics
+  └── 检查阈值 → 告警
+```
+
+流量上报：
+
+```
+POST /api/v1/node/report-traffic
+Service: TrafficService.record()
+  ├── 写 traffic_usage
+  ├── 更新 user_packages.traffic_used
+  └── 检查配额
+```
+
+日志上报：
+
+```
+POST /api/v1/node/report-logs
+Service: LogService.ingest()
+  ├── 写日志（可选 ClickHouse）
+  └── 推送到实时日志 WebSocket
+```
+
+6.2 控制端 → 节点
+
+推送配置：
+
+```
+NodePushService.push(nodeId, config)
+  ├── 组装配置
+  ├── HTTP POST https://node/config/push
+  ├── Header: X-Node-Token + 签名
+  ├── 重试 3 次
+  └── 记录 node_configs
+```
+
+触发指令：
+
+```
+NodePushService.command(nodeId, command, params)
+  ├── HTTP POST https://node/command
+  └── 返回执行结果
+```
+
+6.3 节点部署
+
+NodeDeployService.generateScript(nodeId)
+
+```bash
+#!/bin/bash
+# CDN 节点部署脚本
+NODE_ID=1
+NODE_TOKEN=xxxxxx
+SERVER=https://panel
+
+# 1. 安装 OpenResty
+curl -fsSL https://openresty.org/package/... | bash
+
+# 2. 下载节点接收器
+curl -fsSL ${SERVER}/node/receiver.lua -o /etc/openresty/receiver.lua
+
+# 3. 写配置
+cat > /etc/openresty/nginx.conf <<EOF
+...
+EOF
+
+# 4. 写节点信息
+echo "${NODE_ID}" > /etc/cdn-node/id
+echo "${NODE_TOKEN}" > /etc/cdn-node/token
+echo "${SERVER}" > /etc/cdn-node/server
+
+# 5. 启动
+systemctl enable openresty
+systemctl start openresty
+
+# 6. 注册
+curl -X POST ${SERVER}/api/v1/node/register \
+  -d "{\"nodeId\":${NODE_ID},\"token\":\"${NODE_TOKEN}\"}"
+```
+
+节点接收器（OpenResty Lua）：
+
+· 接收 /config/push、/command
+· 校验 Token + 签名
+· 写配置文件
+· os.execute('openresty -s reload')
+· 返回结果
+
+---
+
+7. 厂商驱动层
+
+7.1 驱动接口
+
+```ts
+export interface VendorDriver {
+  // 域名
+  createDomain(params: CreateDomainParams): Promise<VendorDomain>
+  deleteDomain(vendorDomainId: string): Promise<void>
+  updateDomain(vendorDomainId: string, params: UpdateDomainParams): Promise<void>
+  getDomain(vendorDomainId: string): Promise<VendorDomain>
+
+  // 缓存
+  updateCache(vendorDomainId: string, rules: CacheRule[]): Promise<void>
+
+  // 回源
+  updateOrigin(vendorDomainId: string, origin: OriginConfig): Promise<void>
+
+  // 证书
+  uploadCert(params: UploadCertParams): Promise<VendorCert>
+  bindCert(vendorDomainId: string, certId: string): Promise<void>
+
+  // 刷新
+  purge(vendorDomainId: string, urls: string[]): Promise<PurgeResult>
+
+  // 统计
+  getStatistics(vendorDomainId: string, params: StatParams): Promise<StatData>
+
+  // 日志
+  getLogs(vendorDomainId: string, params: LogParams): Promise<LogData>
+
+  // 测试
+  testConnection(): Promise<boolean>
+}
+```
+
+7.2 驱动工厂
+
+```ts
+@Injectable()
+export class DriverFactory {
+  constructor(
+    private aliDriver: AliDriver,
+    private tencentDriver: TencentDriver,
+    private cloudflareDriver: CloudflareDriver,
+    private awsDriver: AwsDriver,
+  ) {}
+
+  getDriver(code: string): VendorDriver {
+    switch (code) {
+      case 'ali': return this.aliDriver
+      case 'tencent': return this.tencentDriver
+      case 'cloudflare': return this.cloudflareDriver
+      case 'aws': return this.awsDriver
+      default: throw new Error(`Unknown vendor: ${code}`)
+    }
+  }
+}
+```
+
+7.3 各厂商实现要点
+
+Cloudflare：
+
+· SDK：cloudflare npm 包
+· 域名：Zone + Custom Hostname
+· 缓存：Cache Rules API
+· 刷新：Purge Cache API
+
+阿里云：
+
+· SDK：@alicloud/cdn20180510
+· 域名：AddCdnDomain
+· 缓存：BatchSetCdnDomainConfig
+· 刷新：RefreshObjectCaches
+
+腾讯云：
+
+· SDK：tencentcloud-sdk-nodejs
+· 域名：AddCdnDomain
+· 缓存：UpdateDomainConfig
+· 刷新：PurgePathCache
+
+7.4 多厂商路由
+
+```ts
+// 根据套餐或策略选择厂商
+selectVendor(userId, domain): VendorAccount {
+  const pkg = getUserPackage(userId)
+  if (pkg.accessType === 2) return getVendorAccount(pkg.vendorId)
+  if (pkg.accessType === 3) return selectByRegion(domain.region)
+  return null // 自建
+}
+```
+
+---
+
+8. 队列与定时任务
+
+8.1 队列清单
+
+队列 用途 并发 重试
+purge 刷新预热 5 3
+traffic 流量入库 10 2
+statistics 统计聚合 2 2
+alarm 告警发送 5 3
+node-push 节点配置推送 10 3
+failover 故障转移 2 3
+cert-renew 证书续期 2 3
+log-delivery 日志投递 5 3
+cleanup 数据清理 1 1
+
+8.2 定时任务
+
+任务 频率 说明
+traffic-aggregate 每小时 聚合流量到小时表
+traffic-daily 每天 1:00 聚合到天表
+cert-check 每天 3:00 检查证书到期
+package-expire 每天 4:00 处理套餐过期
+node-health 每 30 秒 节点健康检查
+partition 每月 1 日 创建下月分区
+cleanup 每天 5:00 清理过期数据
+
+8.3 队列配置
+
+```ts
+BullModule.forRoot({
+  connection: { host: redisHost, port: redisPort },
+  defaultJobOptions: {
+    attempts: 3,
+    backoff: { type: 'exponential', delay: 2000 },
+    removeOnComplete: 1000,
+    removeOnFail: 5000,
+  },
+})
+```
+
+8.4 队列监控
+
+· @bull-board/nestjs
+· 访问 /admin/queues（管理员）
+
+---
+
+9. 缓存策略
+
+9.1 Redis 用途
+
+用途 Key 格式 TTL
+Refresh Token refresh:{userId}:{jti} 7d
+验证码 captcha:{id} 5m
+登录失败计数 login-fail:{username} 30m
+接口限流 ratelimit:{key} 1m
+节点状态 node:status:{id} 1m
+节点签名防重放 node:sign:{sign} 5m
+站点配置 site-config:{group} 1h
+系统配置 system-config:{group} 1h
+套餐缓存 package:{id} 10m
+用户权限 user:perms:{id} 10m
+统计缓存 stat:{domainId}:{type}:{range} 5m
+
+9.2 缓存失效
+
+· 配置变更 → 删对应 key
+· 套餐变更 → 删 package:{id}、user:perms:{id}
+· 用户权限变更 → 删 user:perms:{id}
+
+9.3 缓存穿透
+
+· 空值缓存 5 分钟
+· 布隆过滤器（可选）
+
+---
+
+10. 日志方案
+
+10.1 日志分级
+
+级别 用途
+error 错误
+warn 警告
+info 业务信息
+debug 调试
+verbose 详细
+
+10.2 日志输出
+
+· 开发：控制台彩色
+· 生产：JSON 格式，输出到文件 + stdout
+· 文件轮转：按天
+· 保留：30 天
+
+10.3 结构化日志
+
+```json
+{
+  "level": "info",
+  "timestamp": "2025-01-01T12:00:00Z",
+  "context": "DomainService",
+  "message": "Domain created",
+  "userId": 1,
+  "domainId": 1,
+  "domain": "cdn.example.com",
+  "requestId": "uuid"
+}
+```
+
+10.4 访问日志
+
+· 用 morgan 或自研中间件
+· 记录：方法、路径、状态码、耗时、IP、UA
+· 慢请求（>1s）单独告警
+
+10.5 业务日志
+
+· 审计日志：写 audit_logs 表
+· 操作日志：winston
+· 节点日志：节点上报 + 存储
+
+---
+
+11. 错误处理
+
+11.1 统一响应
+
+```ts
+// TransformInterceptor
+{
+  code: 0,
+  message: 'success',
+  data: ...,
+  requestId: 'uuid'
+}
+```
+
+11.2 异常过滤器
+
+```ts
+// HttpExceptionFilter
+- 捕获 HttpException
+- 映射错误码
+- 多语言 message
+- 记录日志
+- 返回统一格式
+```
+
+自定义异常：
+
+```ts
+throw new BusinessException(ErrorCode.DOMAIN_EXISTS)
+throw new BusinessException(ErrorCode.QUOTA_EXCEEDED)
+throw new VendorException(ErrorCode.VENDOR_API_ERROR, { vendor: 'ali' })
+```
+
+11.3 错误码
+
+· 集中在 error-code.constant.ts
+· 多语言映射在 locales/{lang}.json
+
+11.4 Prisma 异常
+
+```ts
+// PrismaExceptionFilter
+- P2002 唯一约束 → 409
+- P2025 记录不存在 → 404
+- P2003 外键约束 → 400
+```
+
+---
+
+12. 安全
+
+12.1 密码
+
+· bcrypt，cost 12
+· 密码强度：8-32 位，含大小写+数字
+
+12.2 敏感数据加密
+
+· 厂商 AK/SK：AES-256-GCM
+· 节点 Token：AES-256-GCM
+· API SecretKey：AES-256-GCM
+· 密钥存环境变量
+
+12.3 限流
+
+· 全局：@nestjs/throttler，100 req/min
+· 登录：5 次/分钟
+· 注册：3 次/小时/IP
+· 刷新：10 次/分钟
+· 对外 API：按套餐
+
+12.4 CORS
+
+· 白名单
+· 允许凭证
+
+12.5 Helmet
+
+· CSP、X-Frame-Options 等
+
+12.6 输入校验
+
+· 全局 ValidationPipe
+· whitelist: true、forbidNonWhitelisted: true
+
+12.7 SQL 注入
+
+· Prisma 参数化查询
+
+12.8 XSS
+
+· 富文本用 DOMPurify 清洗
+
+12.9 CSRF
+
+· JWT 无状态，不需要
+· Cookie 场景用 SameSite
+
+12.10 审计
+
+· 敏感操作写 audit_logs
+· 记录 before/after
+
+---
+
+13. 多语言
+
+13.1 后端 i18n
+
+```ts
+// I18nService
+t('error.40001', { lang: 'zh-TW' })  // "参数错误"
+t('error.40001', { lang: 'en' })     // "Invalid parameter"
+```
+
+13.2 语言来源
+
+· Accept-Language Header
+· 用户偏好（存 DB）
+· 默认 zh-TW
+
+13.3 支持语言
+
+· zh-TW（默认）
+· en
+· jp
+· de
+
+13.4 邮件/短信模板
+
+· 按语言存模板
+· 发送时选对应语言
+
+---
+
+14. 文件上传
+
+14.1 存储驱动
+
+```ts
+interface StorageDriver {
+  upload(file: Buffer, path: string): Promise<string>
+  delete(path: string): Promise<void>
+  getUrl(path: string): string
+}
+```
+
+实现：
+
+· LocalStorage：本地磁盘
+· OssStorage：阿里云 OSS
+· S3Storage：AWS S3 / Cloudflare R2
+
+14.2 上传限制
+
+· 大小：10MB
+· 类型：jpg/png/gif/webp/svg/pdf/zip
+· 路径：/uploads/{type}/{yyyy}/{mm}/{uuid}.{ext}
+
+14.3 用途
+
+· Logo、Favicon
+· 用户头像
+· 工单附件
+· 证书文件
+
+---
+
+15. 部署
+
+15.1 环境变量
+
+```env
+# App
+NODE_ENV=production
+PORT=3000
+APP_URL=https://panel
+
+# Database
+DATABASE_URL=mysql://user:pass@mysql:3306/cdn_panel
+
+# Redis
+REDIS_HOST=redis
+REDIS_PORT=6379
+REDIS_PASSWORD=
+
+# JWT
+JWT_SECRET=xxx
+JWT_EXPIRES_IN=2h
+JWT_REFRESH_SECRET=xxx
+JWT_REFRESH_EXPIRES_IN=7d
+
+# Encryption
+ENCRYPTION_KEY=xxx
+
+# Mail
+MAIL_HOST=smtp.example.com
+MAIL_PORT=587
+MAIL_USER=
+MAIL_PASS=
+MAIL_FROM=
+
+# Storage
+STORAGE_DRIVER=local
+STORAGE_LOCAL_PATH=/data/uploads
+
+# Node
+NODE_HEARTBEAT_TIMEOUT=60
+NODE_PUSH_TIMEOUT=30
+
+# Log
+LOG_LEVEL=info
+```
+
+15.2 Docker
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package.json pnpm-lock.yaml ./
+RUN corepack enable && pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm prisma generate && pnpm build
+
+FROM node:20-alpine
+WORKDIR /app
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/prisma ./prisma
+EXPOSE 3000
+CMD ["node", "dist/main.js"]
+```
+
+15.3 docker-compose.yml
+
+```yaml
+version: '3.8'
+
+services:
+  mysql:
+    image: mysql:8.0
+    environment:
+      MYSQL_ROOT_PASSWORD: xxx
+      MYSQL_DATABASE: cdn_panel
+    volumes:
+      - mysql-data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  redis:
+    image: redis:7-alpine
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+
+  server:
+    build: ./apps/server
+    environment:
+      DATABASE_URL: mysql://root:xxx@mysql:3306/cdn_panel
+      REDIS_HOST: redis
+    depends_on:
+      - mysql
+      - redis
+    ports:
+      - "3000:3000"
+
+  web:
+    build: ./apps/web
+    ports:
+      - "80:80"
+    depends_on:
+      - server
+
+volumes:
+  mysql-data:
+  redis-data:
+```
+
+15.4 一键部署
+
+```bash
+# 1. 克隆
+git clone https://github.com/xxx/cdn-panel.git
+cd cdn-panel
+
+# 2. 配置
+cp .env.example .env
+vim .env
+
+# 3. 启动
+docker-compose up -d
+
+# 4. 初始化数据库
+docker-compose exec server pnpm prisma migrate deploy
+docker-compose exec server pnpm prisma db seed
+
+# 5. 访问
+# http://localhost
+```
+
+15.5 Nginx 配置
+
+```nginx
+server {
+  listen 80;
+  server_name panel.example.com;
+
+  location / {
+    root /usr/share/nginx/html;
+    try_files $uri $uri/ /index.html;
+  }
+
+  location /api/ {
+    proxy_pass http://server:3000;
+    proxy_set_header Host $host;
+    proxy_set_header X-Real-IP $remote_addr;
+  }
+
+  location /socket.io/ {
+    proxy_pass http://server:3000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection "upgrade";
+  }
+}
+```
+
+---
+
+16. 测试
+
+16.1 单元测试
+
+· Jest
+· Service 层 mock Prisma
+· 覆盖率 > 60%
+
+16.2 集成测试
+
+· Supertest
+· 测试完整请求链路
+· 用测试数据库
+
+16.3 E2E
+
+· Playwright（前端）
+· 关键流程：登录、添加域名、刷新
+
+16.4 测试命令
+
+```bash
+pnpm test          # 单元
+pnpm test:e2e      # E2E
+pnpm test:cov      # 覆盖率
+```
+
+---
+
+17. 性能优化
+
+项 方案
+数据库 索引优化、慢查询日志
+查询 分页、避免 N+1、select 必要字段
+缓存 Redis 缓存热点数据
+队列 异步处理耗时任务
+连接池 Prisma 连接池
+压缩 gzip/brotli
+分页 游标分页（大表）
+批量 批量插入、批量推送
+并发 节点推送并发控制
+分区 大表按月分区
+
+---
+
+18. 监控
+
+18.1 健康检查
+
+```
+GET /api/v1/health
+{
+  "status": "ok",
+  "database": "ok",
+  "redis": "ok",
+  "uptime": 86400
+}
+```
+
+18.2 指标
+
+· Prometheus + Grafana（可选）
+· 指标：QPS、延迟、错误率、队列长度
+
+18.3 日志聚合
+
+· ELK / Loki（可选）
+
+18.4 告警
+
+· 内置告警模块
+· 邮件/短信/Webhook
+
+---
+
+19. 代码规范
+
+19.1 命名
+
+类型 规范 示例
+模块 PascalCase + Module DomainModule
+服务 PascalCase + Service DomainService
+控制器 PascalCase + Controller DomainController
+DTO PascalCase + Dto CreateDomainDto
+实体 PascalCase Domain
+守卫 PascalCase + Guard JwtAuthGuard
+拦截器 PascalCase + Interceptor TransformInterceptor
+装饰器 camelCase currentUser
+常量 UPPER_SNAKE MAX_PAGE_SIZE
+
+19.2 分层
+
+```
+Controller → Service → Repository → Prisma
+```
+
+· Controller：路由、参数校验、权限
+· Service：业务逻辑
+· Repository：数据访问（可选，简单场景直接用 Prisma）
+
+19.3 DTO 校验
+
+```ts
+export class CreateDomainDto {
+  @IsString()
+  @Matches(/^([a-z0-9-]+\.)+[a-z]{2,}$/i)
+  domain: string
+
+  @IsOptional()
+  @IsString()
+  @MaxLength(255)
+  remark?: string
+}
+```
+
+19.4 事务
+
+```ts
+await this.prisma.$transaction(async (tx) => {
+  await tx.domain.create(...)
+  await tx.domainConfig.create(...)
+})
+```
+
+19.5 事件
+
+```ts
+// 发事件
+this.eventEmitter.emit('domain.created', new DomainCreatedEvent(domainId))
+
+// 监听
+@OnEvent('domain.created')
+handleDomainCreated(event: DomainCreatedEvent) {
+  // 推送配置、发通知等
+}
+```
+
+---
+
+20. 开发流程
+
+20.1 本地开发
+
+```bash
+# 1. 安装依赖
+pnpm install
+
+# 2. 启动 MySQL + Redis
+docker-compose -f docker-compose.dev.yml up -d
+
+# 3. 迁移
+pnpm prisma migrate dev
+
+# 4. 种子
+pnpm prisma db seed
+
+# 5. 启动
+pnpm dev
+```
+
+20.2 添加新模块
+
+```bash
+nest g module modules/xxx
+nest g controller modules/xxx
+nest g service modules/xxx
+```
+
+20.3 数据库变更
+
+```bash
+# 1. 改 schema.prisma
+# 2. 生成迁移
+pnpm prisma migrate dev --name add_xxx
+# 3. 生成客户端
+pnpm prisma generate
+```
+
+20.4 Git 提交
+
+```
+feat(domain): 添加域名批量操作
+fix(node): 修复节点心跳超时
+docs(api): 更新接口文档
+```
+
+---
+
+21. 关键依赖版本
+
+```json
+{
+  "dependencies": {
+    "@nestjs/common": "^10.0.0",
+    "@nestjs/core": "^10.0.0",
+    "@nestjs/jwt": "^10.0.0",
+    "@nestjs/passport": "^10.0.0",
+    "@nestjs/platform-express": "^10.0.0",
+    "@nestjs/platform-socket.io": "^10.0.0",
+    "@nestjs/schedule": "^4.0.0",
+    "@nestjs/swagger": "^7.0.0",
+    "@nestjs/throttler": "^5.0.0",
+    "@nestjs/websockets": "^10.0.0",
+    "@nestjs/bullmq": "^10.0.0",
+    "@prisma/client": "^5.0.0",
+    "bcrypt": "^5.1.0",
+    "bullmq": "^5.0.0",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.0",
+    "ioredis": "^5.3.0",
+    "nodemailer": "^6.9.0",
+    "passport": "^0.7.0",
+    "passport-jwt": "^4.0.0",
+    "socket.io": "^4.7.0",
+    "svg-captcha": "^1.4.0",
+    "winston": "^3.11.0"
+  }
+}
+```
+
+---
+
+本文档结束。
+
+
+

@@ -1,0 +1,17 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "baseUrl": "./",
+    "incremental": true,
+    "sourceMap": true,
+    "removeComments": true,
+    "noFallthroughCasesInSwitch": false,
+    "strictPropertyInitialization": false,
+    "paths": {
+      "@/*": ["src/*"]
+    }
+  },
+  "include": ["src/**/*.ts", "prisma/**/*.ts"],
+  "exclude": ["node_modules", "dist", "test"]
+}

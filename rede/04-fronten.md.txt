@@ -1,0 +1,1319 @@
+04-frontend.md
+
+```markdown
+# CDN 加速控制面板 — 前端设计
+
+> 版本：v0.1
+> 框架：React 18 + TypeScript
+> 构建：Vite
+> UI：shadcn/ui + Tailwind CSS
+> 图表：Recharts
+
+---
+
+## 1. 技术选型
+
+### 1.1 核心依赖
+
+| 类别 | 选型 | 说明 |
+|------|------|------|
+| 框架 | React 18 | 并发特性、Suspense |
+| 语言 | TypeScript 5 | 严格模式 |
+| 构建 | Vite 5 | 快速 HMR |
+| 路由 | React Router v6 | 嵌套路由、懒加载 |
+| 状态 | Zustand | 轻量全局状态 |
+| 数据请求 | TanStack Query v5 | 缓存、重试、轮询 |
+| 表单 | React Hook Form | 性能好 |
+| 校验 | Zod | 与 RHF 集成 |
+| UI 库 | shadcn/ui | 可复制组件，非 npm 包 |
+| 样式 | Tailwind CSS 3 | 原子化 |
+| 图标 | Lucide React | shadcn 默认图标 |
+| 图表 | Recharts | 声明式 |
+| 表格 | TanStack Table v8 | 无头表格 |
+| 国际化 | i18next + react-i18next | 多语言 |
+| 实时 | Socket.IO Client | WebSocket |
+| 日期 | date-fns | 轻量 |
+| 工具 | lodash-es | 按需引入 |
+| 通知 | sonner | Toast |
+| 代码规范 | ESLint + Prettier | |
+
+### 1.2 开发依赖
+
+| 类别 | 选型 |
+|------|------|
+| 包管理 | pnpm |
+| Monorepo | pnpm workspace |
+| 类型检查 | tsc |
+| Git Hook | husky + lint-staged |
+| 提交规范 | commitlint |
+| 测试 | Vitest + Testing Library |
+| E2E | Playwright（可选） |
+
+---
+
+## 2. 目录结构
+```
+
+apps/web/
+├── public/
+│   ├── favicon.ico
+│   └── locales/                    # 静态语言包（可选）
+│
+├── src/
+│   ├── api/                        # 接口层
+│   │   ├── client.ts               # axios 实例 + 拦截器
+│   │   ├── auth.ts
+│   │   ├── user/
+│   │   │   ├── profile.ts
+│   │   │   ├── domain.ts
+│   │   │   ├── cache.ts
+│   │   │   ├── origin.ts
+│   │   │   ├── certificate.ts
+│   │   │   ├── purge.ts
+│   │   │   ├── access-control.ts
+│   │   │   ├── waf.ts
+│   │   │   ├── statistics.ts
+│   │   │   ├── log.ts
+│   │   │   ├── package.ts
+│   │   │   ├── order.ts
+│   │   │   ├── ticket.ts
+│   │   │   ├── notice.ts
+│   │   │   └── api-key.ts
+│   │   ├── admin/
+│   │   │   ├── dashboard.ts
+│   │   │   ├── user.ts
+│   │   │   ├── package.ts
+│   │   │   ├── order.ts
+│   │   │   ├── domain.ts
+│   │   │   ├── node.ts
+│   │   │   ├── node-group.ts
+│   │   │   ├── vendor.ts
+│   │   │   ├── schedule.ts
+│   │   │   ├── waf.ts
+│   │   │   ├── site-config.ts
+│   │   │   ├── system-config.ts
+│   │   │   ├── alarm.ts
+│   │   │   ├── ticket.ts
+│   │   │   ├── notice.ts
+│   │   │   ├── help-doc.ts
+│   │   │   ├── audit.ts
+│   │   │   ├── report.ts
+│   │   │   └── role.ts
+│   │   ├── node.ts                 # 节点通信（调试用）
+│   │   └── types.ts                # 通用类型
+│   │
+│   ├── assets/
+│   │   ├── images/
+│   │   └── icons/
+│   │
+│   ├── components/
+│   │   ├── ui/                     # shadcn 组件（自动生成）
+│   │   │   ├── button.tsx
+│   │   │   ├── input.tsx
+│   │   │   ├── select.tsx
+│   │   │   ├── dialog.tsx
+│   │   │   ├── table.tsx
+│   │   │   ├── form.tsx
+│   │   │   ├── tabs.tsx
+│   │   │   ├── card.tsx
+│   │   │   ├── badge.tsx
+│   │   │   ├── toast.tsx
+│   │   │   ├── tooltip.tsx
+│   │   │   ├── dropdown-menu.tsx
+│   │   │   ├── sheet.tsx
+│   │   │   ├── skeleton.tsx
+│   │   │   ├── switch.tsx
+│   │   │   ├── checkbox.tsx
+│   │   │   ├── radio-group.tsx
+│   │   │   ├── textarea.tsx
+│   │   │   ├── pagination.tsx
+│   │   │   ├── calendar.tsx
+│   │   │   ├── popover.tsx
+│   │   │   ├── command.tsx
+│   │   │   ├── alert.tsx
+│   │   │   ├── progress.tsx
+│   │   │   ├── separator.tsx
+│   │   │   ├── avatar.tsx
+│   │   │   ├── breadcrumb.tsx
+│   │   │   └── ...
+│   │   │
+│   │   ├── common/                 # 业务无关通用组件
+│   │   │   ├── DataTable.tsx       # 封装 TanStack Table
+│   │   │   ├── PageHeader.tsx
+│   │   │   ├── SearchInput.tsx
+│   │   │   ├── FilterBar.tsx
+│   │   │   ├── ConfirmDialog.tsx
+│   │   │   ├── EmptyState.tsx
+│   │   │   ├── LoadingState.tsx
+│   │   │   ├── ErrorState.tsx
+│   │   │   ├── StatusBadge.tsx
+│   │   │   ├── CopyButton.tsx
+│   │   │   ├── DateRangePicker.tsx
+│   │   │   ├── Pagination.tsx
+│   │   │   ├── FileUpload.tsx
+│   │   │   ├── CodeEditor.tsx      # Monaco（WAF规则）
+│   │   │   └── JsonViewer.tsx
+│   │   │
+│   │   ├── charts/                 # 图表组件
+│   │   │   ├── LineChart.tsx
+│   │   │   ├── AreaChart.tsx
+│   │   │   ├── BarChart.tsx
+│   │   │   ├── PieChart.tsx
+│   │   │   ├── StatCard.tsx
+│   │   │   └── ChartContainer.tsx
+│   │   │
+│   │   ├── layout/                 # 布局组件
+│   │   │   ├── AppSidebar.tsx
+│   │   │   ├── AppHeader.tsx
+│   │   │   ├── AppBreadcrumb.tsx
+│   │   │   ├── UserMenu.tsx
+│   │   │   ├── NotificationBell.tsx
+│   │   │   ├── LocaleSwitcher.tsx
+│   │   │   ├── ThemeSwitcher.tsx
+│   │   │   └── NavGroup.tsx
+│   │   │
+│   │   ├── domain/                 # 域名业务组件
+│   │   │   ├── DomainStatusBadge.tsx
+│   │   │   ├── DomainCnameGuide.tsx
+│   │   │   ├── CacheRuleEditor.tsx
+│   │   │   ├── OriginGroupEditor.tsx
+│   │   │   ├── CertSelector.tsx
+│   │   │   ├── PurgeForm.tsx
+│   │   │   ├── AccessControlForm.tsx
+│   │   │   ├── WafRuleEditor.tsx
+│   │   │   └── RealtimeLogViewer.tsx
+│   │   │
+│   │   ├── statistics/
+│   │   │   ├── TrafficChart.tsx
+│   │   │   ├── BandwidthChart.tsx
+│   │   │   ├── HitRateChart.tsx
+│   │   │   ├── RegionMap.tsx
+│   │   │   ├── StatusCodeChart.tsx
+│   │   │   └── TopTable.tsx
+│   │   │
+│   │   ├── node/
+│   │   │   ├── NodeStatusBadge.tsx
+│   │   │   ├── NodeMetricsCard.tsx
+│   │   │   ├── NodeDeployDialog.tsx
+│   │   │   └── NodeForm.tsx
+│   │   │
+│   │   └── vendor/
+│   │       ├── VendorCard.tsx
+│   │       ├── VendorAccountForm.tsx
+│   │       └── VendorSyncStatus.tsx
+│   │
+│   ├── hooks/
+│   │   ├── use-auth.ts
+│   │   ├── use-permission.ts
+│   │   ├── use-pagination.ts
+│   │   ├use-debounce.ts
+│   │   ├── use-toast.ts
+│   │   ├── use-websocket.ts
+│   │   ├── use-realtime-logs.ts
+│   │   ├── use-media-query.ts
+│   │   ├── use-locale.ts
+│   │   └── use-theme.ts
+│   │
+│   ├── layouts/
+│   │   ├── UserLayout.tsx          # 用户端布局
+│   │   ├── AdminLayout.tsx         # 管理员端布局
+│   │   ├── AuthLayout.tsx          # 登录/注册布局
+│   │   └── BlankLayout.tsx         # 空白布局（维护页等）
+│   │
+│   ├── pages/
+│   │   ├── auth/
+│   │   │   ├── Login.tsx
+│   │   │   ├── Register.tsx
+│   │   │   ├── ForgotPassword.tsx
+│   │   │   ├── ResetPassword.tsx
+│   │   │   ├── TwoFactor.tsx
+│   │   │   └── OAuthCallback.tsx
+│   │   │
+│   │   ├── user/
+│   │   │   ├── dashboard/
+│   │   │   │   └── index.tsx
+│   │   │   ├── domain/
+│   │   │   │   ├── List.tsx
+│   │   │   │   ├── Create.tsx
+│   │   │   │   ├── Detail/
+│   │   │   │   │   ├── index.tsx
+│   │   │   │   │   ├── Overview.tsx
+│   │   │   │   │   ├── Cache.tsx
+│   │   │   │   │   ├── Origin.tsx
+│   │   │   │   │   ├── Https.tsx
+│   │   │   │   │   ├── Access.tsx
+│   │   │   │   │   ├── Waf.tsx
+│   │   │   │   │   ├── Statistics.tsx
+│   │   │   │   │   └── Logs.tsx
+│   │   │   ├── purge/
+│   │   │   │   ├── Index.tsx
+│   │   │   │   └── TaskDetail.tsx
+│   │   │   ├── certificate/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Apply.tsx
+│   │   │   ├── statistics/
+│   │   │   │   ├── Traffic.tsx
+│   │   │   │   ├── Bandwidth.tsx
+│   │   │   │   ├── Requests.tsx
+│   │   │   │   ├── HitRate.tsx
+│   │   │   │   ├── Region.tsx
+│   │   │   │   └── Top.tsx
+│   │   │   ├── logs/
+│   │   │   │   ├── Access.tsx
+│   │   │   │   ├── Realtime.tsx
+│   │   │   │   └── Delivery.tsx
+│   │   │   ├── waf/
+│   │   │   │   ├── Rules.tsx
+│   │   │   │   └── Logs.tsx
+│   │   │   ├── package/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── MyPackage.tsx
+│   │   │   ├── order/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── ticket/
+│   │   │   │   ├── List.tsx
+│   │   │   │   ├── Create.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── notice/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── account/
+│   │   │   │   ├── Profile.tsx
+│   │   │   │   ├── Security.tsx
+│   │   │   │   ├── ApiKeys.tsx
+│   │   │   │   └── SubUsers.tsx
+│   │   │   └── help/
+│   │   │       └── Index.tsx
+│   │   │
+│   │   ├── admin/
+│   │   │   ├── dashboard/
+│   │   │   │   └── index.tsx
+│   │   │   ├── user/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── package/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Editor.tsx
+│   │   │   ├── order/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── domain/
+│   │   │   │   ├── List.tsx
+│   │   │   │   ├── Audit.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── node/
+│   │   │   │   ├── List.tsx
+│   │   │   │   ├── Create.tsx
+│   │   │   │   ├── Detail.tsx
+│   │   │   │   └── Monitor.tsx
+│   │   │   ├── node-group/
+│   │   │   │   └── List.tsx
+│   │   │   ├── vendor/
+│   │   │   │   ├── List.tsx
+│   │   │   │   ├── Accounts.tsx
+│   │   │   │   └── SyncLogs.tsx
+│   │   │   ├── schedule/
+│   │   │   │   ├── Policies.tsx
+│   │   │   │   ├── LoadBalance.tsx
+│   │   │   │   ├── Failover.tsx
+│   │   │   │   └── Dns.tsx
+│   │   │   ├── waf/
+│   │   │   │   ├── DefaultRules.tsx
+│   │   │   │   └── Logs.tsx
+│   │   │   ├── site-config/
+│   │   │   │   ├── Basic.tsx
+│   │   │   │   ├── Seo.tsx
+│   │   │   │   ├── Theme.tsx
+│   │   │   │   ├── Nav.tsx
+│   │   │   │   ├── Home.tsx
+│   │   │   │   ├── Auth.tsx
+│   │   │   │   ├── Email.tsx
+│   │   │   │   ├── Sms.tsx
+│   │   │   │   ├── OAuth.tsx
+│   │   │   │   ├── Payment.tsx
+│   │   │   │   ├── Service.tsx
+│   │   │   │   ├── Notice.tsx
+│   │   │   │   ├── I18n.tsx
+│   │   │   │   ├── Agreement.tsx
+│   │   │   │   ├── Maintenance.tsx
+│   │   │   │   ├── Api.tsx
+│   │   │   │   ├── Security.tsx
+│   │   │   │   └── Analytics.tsx
+│   │   │   ├── system-config/
+│   │   │   │   ├── Cache.tsx
+│   │   │   │   ├── Limit.tsx
+│   │   │   │   ├── Queue.tsx
+│   │   │   │   ├── Log.tsx
+│   │   │   │   ├── Alarm.tsx
+│   │   │   │   └── Feature.tsx
+│   │   │   ├── alarm/
+│   │   │   │   ├── Rules.tsx
+│   │   │   │   └── Records.tsx
+│   │   │   ├── ticket/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Detail.tsx
+│   │   │   ├── notice/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Editor.tsx
+│   │   │   ├── help-doc/
+│   │   │   │   ├── List.tsx
+│   │   │   │   └── Editor.tsx
+│   │   │   ├── audit/
+│   │   │   │   ├── Operations.tsx
+│   │   │   │   ├── Logins.tsx
+│   │   │   │   └── ApiLogs.tsx
+│   │   │   ├── report/
+│   │   │   │   ├── Revenue.tsx
+│   │   │   │   ├── Cost.tsx
+│   │   │   │   ├── UserBehavior.tsx
+│   │   │   │   └── NodeCost.tsx
+│   │   │   └── role/
+│   │   │       ├── List.tsx
+│   │   │       └── Editor.tsx
+│   │   │
+│   │   ├── errors/
+│   │   │   ├── NotFound.tsx
+│   │   │   ├── Forbidden.tsx
+│   │   │   ├── ServerError.tsx
+│   │   │   └── Maintenance.tsx
+│   │   │
+│   │   └── index.tsx               # 首页重定向
+│   │
+│   ├── router/
+│   │   ├── index.tsx               # 路由入口
+│   │   ├── user-routes.tsx         # 用户端路由
+│   │   ├── admin-routes.tsx        # 管理员端路由
+│   │   ├── auth-routes.tsx         # 认证路由
+│   │   ├── guards.tsx              # 路由守卫
+│   │   └── lazy.tsx                # 懒加载封装
+│   │
+│   ├── store/
+│   │   ├── auth.ts                 # 认证状态
+│   │   ├── user.ts                 # 用户信息
+│   │   ├── theme.ts                # 主题
+│   │   ├── locale.ts               # 语言
+│   │   ├── sidebar.ts              # 侧边栏折叠
+│   │   └── notification.ts         # 通知
+│   │
+│   ├── locales/
+│   │   ├── zh-TW/
+│   │   │   ├── common.json
+│   │   │   ├── auth.json
+│   │   │   ├── user.json
+│   │   │   ├── admin.json
+│   │   │   ├── domain.json
+│   │   │   ├── node.json
+│   │   │   ├── errors.json
+│   │   │   └── validation.json
+│   │   ├── en/
+│   │   │   └── ...（同结构）
+│   │   ├── jp/
+│   │   │   └── ...
+│   │   └── de/
+│   │       └── ...
+│   │
+│   ├── lib/
+│   │   ├── utils.ts                # cn() 等
+│   │   ├── format.ts               # 格式化（流量、带宽、日期）
+│   │   ├── validators.ts           # Zod schemas
+│   │   ├── constants.ts            # 常量
+│   │   ├── permissions.ts          # 权限工具
+│   │   ├── i18n.ts                 # i18next 配置
+│   │   └── socket.ts               # Socket.IO 客户端
+│   │
+│   ├── styles/
+│   │   ├── globals.css
+│   │   └── themes.css              # 主题变量
+│   │
+│   ├── types/
+│   │   ├── api.ts                  # API 类型
+│   │   ├── domain.ts
+│   │   ├── node.ts
+│   │   ├── user.ts
+│   │   └── index.ts
+│   │
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── vite-env.d.ts
+│
+├── index.html
+├── vite.config.ts
+├── tailwind.config.ts
+├── tsconfig.json
+├── components.json                 # shadcn 配置
+├── postcss.config.js
+├── .eslintrc.cjs
+├── .prettierrc
+└── package.json
+
+```
+---
+
+## 3. 路由设计
+
+### 3.1 路由结构
+```
+
+/                           → 重定向到 /user/dashboard 或 /admin/dashboard
+/login                      → 登录
+/register                   → 注册
+/forgot-password            → 忘记密码
+/reset-password             → 重置密码
+/oauth/callback             → OAuth 回调
+
+/user                       → UserLayout
+/dashboard                → 仪表盘
+/domain                   → 域名列表
+/create                 → 添加域名
+/:id                    → 域名详情（嵌套 Tab）
+/overview
+/cache
+/origin
+/https
+/access
+/waf
+/statistics
+/logs
+/purge                    → 刷新预热
+/:id                    → 任务详情
+/certificate              → 证书列表
+/apply                  → 申请证书
+/statistics               → 统计
+/traffic
+/bandwidth
+/requests
+/hitrate
+/region
+/top
+/logs                     → 日志
+/access
+/realtime
+/delivery
+/waf                      → WAF
+/rules
+/logs
+/package                  → 套餐
+/list
+/my
+/order                    → 订单
+/:id
+/ticket                   → 工单
+/create
+/:id
+/notice                   → 公告
+/:id
+/account                  → 账户
+/profile
+/security
+/api-keys
+/sub-users
+/help                     → 帮助
+
+/admin                      → AdminLayout
+/dashboard                → 仪表盘
+/user                     → 用户管理
+/:id
+/package                  → 套餐
+/editor
+/order                    → 订单
+/:id
+/domain                   → 域名
+/audit
+/:id
+/node                     → 节点
+/create
+/:id
+/:id/monitor
+/node-group               → 节点组
+/vendor                   → 厂商
+/accounts
+/sync-logs
+/schedule                 → 调度
+/policies
+/loadbalance
+/failover
+/dns
+/waf                      → WAF
+/default-rules
+/logs
+/site-config              → 网站配置
+/basic
+/seo
+/theme
+/nav
+/home
+/auth
+/email
+/sms
+/oauth
+/payment
+/service
+/notice
+/i18n
+/agreement
+/maintenance
+/api
+/security
+/analytics
+/system-config            → 系统配置
+/cache
+/limit
+/queue
+/log
+/alarm
+/feature
+/alarm                    → 告警
+/rules
+/records
+/ticket                   → 工单
+/:id
+/notice                   → 公告
+/editor
+/help-doc                 → 帮助文档
+/editor
+/audit                    → 审计
+/operations
+/logins
+/api-logs
+/report                   → 报表
+/revenue
+/cost
+/user-behavior
+/node-cost
+/role                     → 角色权限
+/editor
+
+/403                        → 无权限
+/404                        → 未找到
+/500                        → 服务器错误
+/maintenance                → 维护中
+
+```
+### 3.2 路由守卫
+
+```tsx
+// guards.tsx
+- RequireAuth：未登录跳 /login
+- RequireGuest：已登录跳 /user/dashboard
+- RequireRole：角色校验（user / admin）
+- RequirePermission：权限点校验
+- RequirePackageFeature：套餐功能校验
+```
+
+3.3 懒加载
+
+```tsx
+const DomainList = lazy(() => import('@/pages/user/domain/List'))
+```
+
+· 按路由懒加载
+· 首屏只加载 Layout + Dashboard
+· Suspense fallback 用 Skeleton
+
+---
+
+4. 状态管理
+
+4.1 Zustand Store
+
+auth.ts
+
+```ts
+interface AuthState {
+  accessToken: string | null
+  refreshToken: string | null
+  user: User | null
+  permissions: string[]
+  isAuthenticated: boolean
+  login: (data) => void
+  logout: () => void
+  setUser: (user) => void
+  hasPermission: (code: string) => boolean
+}
+```
+
+theme.ts
+
+```ts
+interface ThemeState {
+  mode: 'light' | 'dark' | 'system'
+  primaryColor: string
+  setMode: (mode) => void
+  setPrimaryColor: (color) => void
+}
+```
+
+locale.ts
+
+```ts
+interface LocaleState {
+  locale: 'zh-TW' | 'en' | 'jp' | 'de'
+  setLocale: (locale) => void
+}
+```
+
+sidebar.ts
+
+```ts
+interface SidebarState {
+  collapsed: boolean
+  toggle: () => void
+}
+```
+
+notification.ts
+
+```ts
+interface NotificationState {
+  unreadCount: number
+  items: Notification[]
+  markRead: (id) => void
+}
+```
+
+4.2 TanStack Query
+
+Query Key 规范：
+
+```ts
+['domains', { page, pageSize, keyword }]
+['domain', id]
+['domain', id, 'cache-rules']
+['domain', id, 'statistics', { start, end }]
+['nodes', { page, status }]
+['node', id, 'metrics', { start, end }]
+```
+
+常用配置：
+
+```ts
+- staleTime: 30s（列表）、5min（详情）
+- gcTime: 5min
+- retry: 1
+- refetchOnWindowFocus: false
+```
+
+轮询：
+
+· 仪表盘：30s
+· 节点监控：10s
+· 刷新任务：5s（执行中）
+
+4.3 持久化
+
+· accessToken / refreshToken：localStorage
+· theme / locale：localStorage
+· sidebar：localStorage
+· 其他：内存
+
+---
+
+5. API 客户端
+
+5.1 Axios 实例
+
+```ts
+// api/client.ts
+const client = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL,
+  timeout: 30000,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+})
+
+// 请求拦截：注入 Token、语言
+client.interceptors.request.use((config) => {
+  const token = useAuthStore.getState().accessToken
+  if (token) config.headers.Authorization = `Bearer ${token}`
+  config.headers['Accept-Language'] = useLocaleStore.getState().locale
+  return config
+})
+
+// 响应拦截：统一处理 code、错误
+client.interceptors.response.use(
+  (res) => {
+    if (res.data.code !== 0) {
+      toast.error(res.data.message)
+      return Promise.reject(res.data)
+    }
+    return res.data
+  },
+  async (error) => {
+    // 401 → 刷新 Token → 重试
+    // 403 → 提示无权限
+    // 429 → 提示限流
+    // 5xx → 提示服务器错误
+  }
+)
+```
+
+5.2 Token 刷新
+
+· 401 时用 refreshToken 换新 accessToken
+· 并发请求排队，只刷新一次
+· 刷新失败 → 登出 → 跳登录页
+
+5.3 文件上传
+
+```ts
+export async function uploadFile(file: File, type: string) {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('type', type)
+  return client.post('/api/v1/upload', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+```
+
+5.4 下载
+
+```ts
+export async function downloadFile(url: string, filename: string) {
+  const res = await client.get(url, { responseType: 'blob' })
+  const blob = new Blob([res.data])
+  const link = document.createElement('a')
+  link.href = URL.createObjectURL(blob)
+  link.download = filename
+  link.click()
+}
+```
+
+---
+
+6. UI 设计规范
+
+6.1 设计系统
+
+色板（CSS 变量，支持明暗）：
+
+```css
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --primary: 221.2 83.2% 53.3%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 210 40% 96.1%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 210 40% 96.1%;
+  --destructive: 0 84.2% 60.2%;
+  --success: 142.1 76.2% 36.3%;
+  --warning: 38 92% 50%;
+  --border: 214.3 31.8% 91.4%;
+  --ring: 221.2 83.2% 53.3%;
+  --radius: 0.5rem;
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  ...
+}
+```
+
+字号：
+
+用途 类 大小
+页面标题 text-2xl 24px
+卡片标题 text-lg 18px
+正文 text-sm 14px
+辅助文字 text-xs 12px
+
+间距：
+
+· 统一 4px 基准：p-1=4px, p-2=8px, p-4=16px, p-6=24px
+· 卡片内边距：p-6
+· 页面外边距：p-6
+· 表单字段间距：space-y-4
+
+圆角：
+
+· --radius: 0.5rem（8px）
+· 按钮/输入框：rounded-md
+· 卡片：rounded-lg
+· 对话框：rounded-lg
+
+6.2 布局
+
+用户端布局：
+
+```
+┌──────────────────────────────────────────┐
+│  Header（Logo + 通知 + 语言 + 主题 + 用户）│
+├────────┬─────────────────────────────────┤
+│        │                                 │
+│ Side   │  Breadcrumb                     │
+│ bar    │  ─────────────────────────────  │
+│        │  PageHeader（标题 + 操作按钮）    │
+│        │  ─────────────────────────────  │
+│        │  Content                        │
+│        │                                 │
+└────────┴─────────────────────────────────┘
+```
+
+管理员端布局：
+
+· 同用户端，但侧边栏菜单不同
+· 顶部加「环境标识」（生产/测试）
+
+侧边栏：
+
+· 可折叠（240px / 64px）
+· 分组菜单，支持多级
+· 当前路由高亮
+· 移动端抽屉式
+
+响应式断点：
+
+· sm: 640px
+· md: 768px
+· lg: 1024px
+· xl: 1280px
+· 2xl: 1536px
+
+6.3 组件规范
+
+按钮：
+
+变体 用途
+default 主操作
+secondary 次操作
+outline 次要
+ghost 图标按钮
+destructive 危险操作
+link 链接
+
+状态徽章：
+
+状态 颜色
+已启用 / 在线 / 成功 success（绿）
+部署中 / 执行中 info（蓝）
+待审核 / 警告 warning（黄）
+停用 / 离线 / 失败 destructive（红）
+已删除 muted（灰）
+
+表格：
+
+· 表头固定
+· 支持排序、筛选、分页
+· 行选择（批量操作）
+· 列可配置显示
+· 空状态、加载状态
+· 移动端卡片式
+
+表单：
+
+· Label 在上，输入在下
+· 必填标 *
+· 错误信息在下方，红色
+· 字段级校验 + 提交校验
+· 支持字段分组（Card / Fieldset）
+
+对话框：
+
+· 宽度：sm 400 / md 500 / lg 700 / xl 900
+· 危险操作二次确认
+· 表单对话框提交后关闭
+
+Toast：
+
+· 成功：绿色 + CheckCircle
+· 错误：红色 + XCircle
+· 警告：黄色 + AlertTriangle
+· 信息：蓝色 + Info
+· 位置：右上角
+· 自动关闭：3s
+
+---
+
+7. 页面清单
+
+7.1 认证页面
+
+页面 路由 说明
+登录 /login 用户名/密码 + 验证码 + 记住我 + 第三方登录
+注册 /register 用户名/邮箱/手机 + 密码 + 邀请码 + 验证码
+忘记密码 /forgot-password 邮箱/手机找回
+重置密码 /reset-password Token 重置
+2FA /2fa 二次验证
+OAuth 回调 /oauth/callback 第三方登录回调
+
+7.2 用户端页面
+
+页面 路由 说明
+仪表盘 /user/dashboard 流量/带宽/请求/命中率卡片 + 套餐 + 告警
+域名列表 /user/domain 表格 + 搜索 + 筛选 + 批量
+添加域名 /user/domain/create 表单 + 源站配置
+域名详情 /user/domain/:id Tab 切换
+刷新预热 /user/purge 提交 + 任务列表
+证书列表 /user/certificate 表格 + 申请
+统计 /user/statistics/* 多维度图表
+日志 /user/logs/* 访问 + 实时 + 投递
+WAF /user/waf/* 规则 + 日志
+套餐 /user/package/* 列表 + 我的
+订单 /user/order/* 列表 + 详情
+工单 /user/ticket/* 列表 + 创建 + 详情
+公告 /user/notice/* 列表 + 详情
+账户 /user/account/* 资料 + 安全 + API密钥
+帮助 /user/help 文档
+
+7.3 管理员端页面
+
+页面 路由 说明
+仪表盘 /admin/dashboard 平台概览
+用户管理 /admin/user 列表 + 详情
+套餐 /admin/package 列表 + 编辑
+订单 /admin/order 列表 + 详情
+域名 /admin/domain 全部 + 审核
+节点 /admin/node 列表 + 创建 + 详情 + 监控
+节点组 /admin/node-group 列表
+厂商 /admin/vendor 厂商 + 账号 + 同步日志
+调度 /admin/schedule/* 策略 + 负载 + 故障 + DNS
+WAF /admin/waf/* 默认规则 + 日志
+网站配置 /admin/site-config/* 18 个分组
+系统配置 /admin/system-config/* 6 个分组
+告警 /admin/alarm/* 规则 + 记录
+工单 /admin/ticket/* 列表 + 详情
+公告 /admin/notice 列表 + 编辑
+帮助文档 /admin/help-doc 列表 + 编辑
+审计 /admin/audit/* 操作 + 登录 + API
+报表 /admin/report/* 收入 + 成本 + 行为 + 节点
+角色权限 /admin/role 列表 + 编辑
+
+---
+
+8. 多语言（i18n）
+
+8.1 配置
+
+```ts
+// lib/i18n.ts
+i18n.use(initReactI18next).init({
+  resources: {
+    'zh-TW': { common: zhTWCommon, ... },
+    en: { common: enCommon, ... },
+    jp: { common: jpCommon, ... },
+    de: { common: deCommon, ... },
+  },
+  lng: localStorage.getItem('locale') || 'zh-TW',
+  fallbackLng: 'zh-TW',
+  defaultNS: 'common',
+  interpolation: { escapeValue: false },
+})
+```
+
+8.2 支持语言
+
+代码 语言 默认
+zh-TW 繁体中文 ✓
+en English
+jp 日本語
+de Deutsch
+
+8.3 命名空间
+
+ns 内容
+common 通用（按钮、状态、分页）
+auth 登录/注册
+user 用户端
+admin 管理员端
+domain 域名相关
+node 节点相关
+errors 错误信息
+validation 表单校验
+
+8.4 使用
+
+```tsx
+const { t } = useTranslation('domain')
+t('domain.list.title')
+t('domain.status.enabled')
+t('domain.cache.ttl', { value: 3600 })
+```
+
+8.5 后端错误码多语言
+
+· 前端根据 code 映射到 errors.json
+· 例：errors.40001 → "参数错误" / "Invalid parameter"
+
+8.6 语言切换
+
+· 顶部 LocaleSwitcher
+· 切换后存 localStorage
+· 同步更新 Accept-Language
+· 日期/数字格式随语言变化（date-fns locale）
+
+---
+
+9. 主题
+
+9.1 明暗模式
+
+· light / dark / system
+· 存 localStorage
+· 切换给 <html> 加 dark 类
+· shadcn 组件自动适配
+
+9.2 主题色
+
+· 管理员可在「网站配置 → 主题」设置
+· 前端启动时拉取，注入 CSS 变量
+· 支持自定义主色
+
+9.3 登录页样式
+
+· 管理员可配置：居中 / 左右分栏 / 背景图
+· 前端根据配置渲染
+
+---
+
+10. 权限控制
+
+10.1 路由级
+
+```tsx
+<RequirePermission code="domain:create">
+  <CreateDomain />
+</RequirePermission>
+```
+
+10.2 组件级
+
+```tsx
+const { hasPermission } = usePermission()
+{hasPermission('domain:delete') && <DeleteButton />}
+```
+
+10.3 菜单级
+
+· 侧边栏菜单根据权限过滤
+· 无权限的菜单不渲染
+
+10.4 套餐功能级
+
+```tsx
+const { hasFeature } = usePackage()
+{hasFeature('waf') && <WafTab />}
+```
+
+· 套餐不支持的功能：隐藏或显示升级提示
+
+---
+
+11. 表单校验
+
+11.1 Zod Schema
+
+```ts
+export const domainSchema = z.object({
+  domain: z.string()
+    .regex(/^([a-z0-9-]+\.)+[a-z]{2,}$/i, '域名格式不正确')
+    .max(255),
+  businessType: z.enum(['网站', '下载', '视频', '直播']),
+  remark: z.string().max(255).optional(),
+})
+```
+
+11.2 常用校验
+
+· 域名：正则
+· IP：IPv4/IPv6
+· 端口：1-65535
+· TTL：0-31536000
+· URL：http(s)://
+· 邮箱、手机号
+
+11.3 错误展示
+
+· 字段下方红字
+· 提交时滚动到第一个错误
+· Toast 汇总
+
+---
+
+12. 实时功能
+
+12.1 WebSocket 封装
+
+```ts
+// lib/socket.ts
+export function createSocket(namespace: string, token: string) {
+  return io(`${WS_BASE}${namespace}`, {
+    auth: { token },
+    transports: ['websocket'],
+    reconnection: true,
+    reconnectionDelay: 1000,
+    reconnectionAttempts: 5,
+  })
+}
+```
+
+12.2 实时日志
+
+· 连接 /user/logs/realtime
+· 订阅域名 + 过滤条件
+· 虚拟滚动展示（react-virtual）
+· 最多保留 1000 条
+· 套餐不支持时显示升级提示
+
+12.3 实时监控
+
+· 管理员端节点监控
+· 推送指标 → Recharts 实时更新
+
+12.4 通知
+
+· 连接 /user/notifications
+· 收到推送 → 更新 store → 铃铛红点
+· Toast 提示
+
+---
+
+13. 性能优化
+
+项 方案
+路由懒加载 React.lazy + Suspense
+组件懒加载 大组件按需 import
+图片 懒加载 + WebP
+列表 虚拟滚动（大列表）
+表格 分页 + 服务端排序
+图表 按需加载 + 数据降采样
+请求 TanStack Query 缓存 + 去重
+打包 分包（vendor / ui / charts）
+首屏 预加载关键资源
+图标 Lucide 按需引入
+
+---
+
+14. 错误处理
+
+14.1 全局错误边界
+
+```tsx
+<ErrorBoundary fallback={<ServerError />}>
+  <App />
+</ErrorBoundary>
+```
+
+14.2 请求错误
+
+· 统一拦截器处理
+· 401 → 刷新 Token / 登出
+· 403 → 提示无权限
+· 429 → 提示限流
+· 5xx → 提示服务器错误
+· 网络错误 → 提示网络异常
+
+14.3 页面错误
+
+· 404 / 403 / 500 / 维护中
+· 独立页面
+
+---
+
+15. 构建与部署
+
+15.1 环境变量
+
+```
+VITE_API_BASE_URL=https://panel/api
+VITE_WS_BASE_URL=wss://panel
+VITE_APP_TITLE=CDN Panel
+```
+
+15.2 构建
+
+```bash
+pnpm build
+# 输出 dist/
+```
+
+15.3 部署
+
+· Nginx 托管 dist/
+· 配置 SPA fallback：try_files $uri $uri/ /index.html
+· 配置 API 反代
+· 配置 WebSocket 反代
+
+15.4 Docker
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY . .
+RUN pnpm install && pnpm build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/conf.d/default.conf
+```
+
+---
+
+16. 代码规范
+
+16.1 命名
+
+类型 规范 示例
+组件 PascalCase DomainList.tsx
+页面 PascalCase List.tsx
+Hook camelCase + use useAuth.ts
+工具 camelCase formatTraffic.ts
+类型 PascalCase DomainStatus
+常量 UPPER_SNAKE MAX_PAGE_SIZE
+Store camelCase authStore.ts
+
+16.2 组件结构
+
+```tsx
+// 1. imports
+// 2. types
+// 3. constants
+// 4. component
+// 5. hooks
+// 6. handlers
+// 7. render
+// 8. export
+```
+
+16.3 ESLint
+
+· @typescript-eslint
+· eslint-plugin-react-hooks
+· eslint-plugin-react-refresh
+· eslint-plugin-import
+
+16.4 Prettier
+
+```json
+{
+  "semi": false,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "printWidth": 100,
+  "tabWidth": 2
+}
+```
+
+16.5 Git 提交
+
+```
+feat: 新功能
+fix: 修复
+docs: 文档
+style: 格式
+refactor: 重构
+perf: 性能
+test: 测试
+chore: 构建/工具
+```
+
+---
+
+本文档结束。确认后进入 05-backend.md。
+
+
+

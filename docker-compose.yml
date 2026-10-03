@@ -1,0 +1,91 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: lunar-mysql
+    restart: unless-stopped
+    command: >-
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_unicode_ci
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root_pass_123}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-cdn_panel}
+      MYSQL_USER: ${MYSQL_USER:-cdn}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:-cdn_pass_123}
+    ports:
+      - "${MYSQL_PORT:-3306}:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "mysqladmin",
+          "ping",
+          "-h",
+          "127.0.0.1",
+          "-uroot",
+          "-p${MYSQL_ROOT_PASSWORD:-root_pass_123}",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: lunar-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  server:
+    build:
+      context: .
+      dockerfile: docker/server.Dockerfile
+    container_name: lunar-server
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 3000
+      APP_URL: ${APP_URL:-http://localhost}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost}
+      DATABASE_URL: mysql://${MYSQL_USER:-cdn}:${MYSQL_PASSWORD:-cdn_pass_123}@mysql:3306/${MYSQL_DATABASE:-cdn_panel}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ""
+      REDIS_DB: 0
+      JWT_SECRET: ${JWT_SECRET:-change_me_access_secret}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-2h}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change_me_refresh_secret}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      ENCRYPTION_KEY: ${ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      RUN_SEED: ${RUN_SEED:-true}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    ports:
+      - "${SERVER_PORT:-3000}:3000"
+
+  web:
+    build:
+      context: .
+      dockerfile: docker/web.Dockerfile
+    container_name: lunar-web
+    restart: unless-stopped
+    depends_on:
+      - server
+    ports:
+      - "${WEB_PORT:-80}:80"
+
+volumes:
+  mysql-data:
+  redis-data:
