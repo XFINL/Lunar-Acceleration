@@ -11,15 +11,15 @@ CREATE TABLE `users` (
     `role_type` TINYINT NOT NULL DEFAULT 1,
     `balance` DECIMAL(12, 2) NOT NULL DEFAULT 0.00,
     `package_id` BIGINT UNSIGNED NULL,
-    `package_expire_at` DATETIME NULL,
+    `package_expire_at` DATETIME(3) NULL,
     `invite_code` VARCHAR(32) NULL,
     `inviter_id` BIGINT UNSIGNED NULL,
     `two_fa_secret` VARCHAR(64) NULL,
-    `last_login_at` DATETIME NULL,
+    `last_login_at` DATETIME(3) NULL,
     `last_login_ip` VARCHAR(64) NULL,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
-    `deleted_at` DATETIME NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `deleted_at` DATETIME(3) NULL,
 
     UNIQUE INDEX `users_username_key`(`username`),
     UNIQUE INDEX `users_email_key`(`email`),
@@ -37,7 +37,7 @@ CREATE TABLE `roles` (
     `code` VARCHAR(64) NOT NULL,
     `description` VARCHAR(255) NULL,
     `is_system` TINYINT NOT NULL DEFAULT 0,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     UNIQUE INDEX `roles_code_key`(`code`),
     PRIMARY KEY (`id`)
@@ -50,7 +50,7 @@ CREATE TABLE `permissions` (
     `code` VARCHAR(128) NOT NULL,
     `resource` VARCHAR(64) NOT NULL,
     `action` VARCHAR(32) NOT NULL,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     UNIQUE INDEX `permissions_code_key`(`code`),
     INDEX `permissions_resource_idx`(`resource`),
@@ -83,9 +83,9 @@ CREATE TABLE `user_api_keys` (
     `access_key` VARCHAR(64) NOT NULL,
     `secret_key` VARCHAR(128) NOT NULL,
     `status` TINYINT NOT NULL DEFAULT 1,
-    `expire_at` DATETIME NULL,
-    `last_used_at` DATETIME NULL,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `expire_at` DATETIME(3) NULL,
+    `last_used_at` DATETIME(3) NULL,
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     UNIQUE INDEX `user_api_keys_access_key_key`(`access_key`),
     INDEX `user_api_keys_user_id_idx`(`user_id`),
@@ -102,7 +102,7 @@ CREATE TABLE `user_login_logs` (
     `ua` VARCHAR(512) NULL,
     `status` TINYINT NOT NULL,
     `message` VARCHAR(255) NULL,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `user_login_logs_user_id_idx`(`user_id`),
     INDEX `user_login_logs_created_at_idx`(`created_at`),
@@ -120,7 +120,7 @@ CREATE TABLE `user_balances` (
     `ref_id` BIGINT UNSIGNED NULL,
     `remark` VARCHAR(255) NULL,
     `operator_id` BIGINT UNSIGNED NULL,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `user_balances_user_id_idx`(`user_id`),
     INDEX `user_balances_created_at_idx`(`created_at`),
@@ -134,7 +134,7 @@ CREATE TABLE `site_configs` (
     `config_key` VARCHAR(128) NOT NULL,
     `config_value` JSON NULL,
     `description` VARCHAR(255) NULL,
-    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `site_configs_group_key_idx`(`group_key`),
     UNIQUE INDEX `site_configs_group_key_config_key_key`(`group_key`, `config_key`),
@@ -148,7 +148,7 @@ CREATE TABLE `system_configs` (
     `config_key` VARCHAR(128) NOT NULL,
     `config_value` JSON NULL,
     `description` VARCHAR(255) NULL,
-    `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     UNIQUE INDEX `system_configs_group_key_config_key_key`(`group_key`, `config_key`),
     PRIMARY KEY (`id`)
@@ -167,7 +167,7 @@ CREATE TABLE `audit_logs` (
     `after` JSON NULL,
     `ip` VARCHAR(64) NULL,
     `ua` VARCHAR(512) NULL,
-    `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
+    `created_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3),
 
     INDEX `audit_logs_user_id_idx`(`user_id`),
     INDEX `audit_logs_module_idx`(`module`),
