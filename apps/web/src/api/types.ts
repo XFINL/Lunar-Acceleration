@@ -138,7 +138,8 @@ export interface PackageVo {
   bandwidthLimit: number
   domainLimit: number
   requestQuota: string
-  featureFlags: string | null
+  /** 后端以 JSON 形式返回（对象 / 数组 / 字符串均可能出现） */
+  featureFlags: unknown
   overQuotaPolicy: number
   price: string
   period: number
@@ -162,7 +163,8 @@ export interface MyPackageVo {
   domainLimit: number
   bandwidthLimit: number
   status: number
-  featureFlags: string | null
+  /** 后端以 JSON 形式返回（对象 / 数组 / 字符串均可能出现） */
+  featureFlags: unknown
 }
 
 export interface OrderVo {

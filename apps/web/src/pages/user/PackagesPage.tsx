@@ -49,24 +49,26 @@ const USER_PACKAGE_STATUS_VARIANT: Record<number, 'success' | 'warning' | 'secon
   [UserPackageStatus.CANCELLED]: 'secondary',
 }
 
-/** 将 JSON（对象或数组）形式的 featureFlags 解析为特性标识数组 */
-function parseFeatureFlags(value: string | null): string[] {
+/** 将后端返回的 featureFlags（对象 / 数组 / JSON 字符串）解析为已启用的特性标识数组 */
+function parseFeatureFlags(value: unknown): string[] {
   if (!value) return []
-  try {
-    const parsed = JSON.parse(value) as unknown
-    if (Array.isArray(parsed)) {
-      return parsed.filter((item): item is string => typeof item === 'string')
+  if (Array.isArray(value)) {
+    return value.filter((item): item is string => typeof item === 'string')
+  }
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    return FEATURE_FLAGS.filter((flag) => obj[flag] === true)
+  }
+  if (typeof value === 'string') {
+    try {
+      return parseFeatureFlags(JSON.parse(value) as unknown)
+    } catch {
+      // 非 JSON 字符串：退化为逗号分隔
+      return value
+        .split(',')
+        .map((item) => item.trim())
+        .filter(Boolean)
     }
-    if (parsed && typeof parsed === 'object') {
-      const obj = parsed as Record<string, unknown>
-      return FEATURE_FLAGS.filter((flag) => obj[flag] === true)
-    }
-  } catch {
-    // 非法 JSON：退化为逗号分隔
-    return value
-      .split(',')
-      .map((item) => item.trim())
-      .filter(Boolean)
   }
   return []
 }

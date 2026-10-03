@@ -91,14 +91,15 @@ const EMPTY_FORM: PackageForm = {
   maxCacheRules: '',
 }
 
-function parseFeatureFlags(raw: string | null): { features: Record<string, boolean>; maxCacheRules: string } {
+function parseFeatureFlags(raw: unknown): { features: Record<string, boolean>; maxCacheRules: string } {
   const features: Record<string, boolean> = Object.fromEntries(
     FEATURE_FLAGS.map((flag) => [flag, false]),
   )
   let maxCacheRules = ''
   if (!raw) return { features, maxCacheRules }
   try {
-    const parsed = JSON.parse(raw) as unknown
+    // 后端以 JSON 形式返回，可能是对象 / 数组，也可能是 JSON 字符串
+    const parsed = typeof raw === 'string' ? (JSON.parse(raw) as unknown) : raw
     if (Array.isArray(parsed)) {
       for (const item of parsed) {
         if (typeof item === 'string' && item in features) features[item] = true
