@@ -494,6 +494,9 @@ export default {
     test: '接続テスト', sync: '同期', connected: '接続成功', syncComplete: '読み取り専用スナップショット同期完了', ignored: '無視', accountDetails: '選択中のアカウント詳細', snapshots: 'ドメインスナップショット', logs: 'ログ', remoteStatusNote: 'リモートベンダーの状態は観測情報のみです。リモートの pending/online をローカルでの承認、有効化、デプロイと解釈しないでください。', selectAccount: 'アカウントを選択してログまたはスナップショットを表示します。', action: '操作', result: '結果', message: 'メッセージ', success: '成功', failure: '失敗', noSnapshots: 'ドメインスナップショットはありません。読み取り専用同期で一致するローカルドメインを確認します。', localDomain: 'ローカルドメイン', remoteHostname: 'リモートホスト名', cname: 'CNAME', providerStatus: 'リモート状態（観測）', sslStatus: 'SSL 状態', syncedAt: '観測日時', observedOnly: '観測のみ',
   vendorWrite: {
     "title": "クラウドの制御付き登録／削除",
+    "deploymentTitle": "管理リソースの登録 / 設定配信 / 削除",
+    "deploy": "設定配信と検証",
+    "deployNotice": "設定配信は管理対象リソースだけに行い、対応する設定を配信後に読み戻して検証します。未対応の設定は拒否します。検証成功も実トラフィック・DNS・TLS の疎通確認や自動公開を意味しません。",
     "account": "アカウント：",
     "created": "制御付き書き込みジョブをキューに追加しました。",
     "retried": "再試行を送信しました。",

@@ -71,7 +71,8 @@ export function VendorWritePanel({ accountId, accountName }: VendorWritePanelPro
   const writesEnabled = capabilities?.writesEnabled === true && capabilities.workerEnabled === true
   const normalizedDomainId = domainId.trim()
   const validDomainId = /^[1-9][0-9]{0,19}$/.test(normalizedDomainId) && BigInt(normalizedDomainId) <= 18446744073709551615n
-  const submitDisabled = !canDeploy || !capabilityReady || !writesEnabled || !validDomainId || createJob.isPending
+  const deploySupported = capabilities?.supportedActions?.includes('deploy') === true
+  const submitDisabled = !canDeploy || !capabilityReady || !writesEnabled || !validDomainId || createJob.isPending || (action === 'deploy' && !deploySupported)
   const handlePayloadChange = (update: () => void) => {
     idempotencyRef.current = null
     update()
@@ -95,13 +96,14 @@ export function VendorWritePanel({ accountId, accountName }: VendorWritePanelPro
     if (status === 'needs_review') return tx('needsReview', '待人工确认')
     return status
   }
-  const actionLabel = (item: VendorWriteAction) => item === 'register' ? tx('register', '云端基础注册') : tx('delete', '云端删除')
+  const actionLabel = (item: VendorWriteAction) => item === 'register' ? tx('register', '云端基础注册') : item === 'deploy' ? tx('deploy', '設定配信と検証') : tx('delete', '云端删除')
+  const deployNotice = tx('deployNotice', '設定配信は管理対象リソースだけに行い、対応する設定を配信後に読み戻して検証します。未対応の設定は拒否します。検証成功も実トラフィック・DNS・TLS の疎通確認や自動公開を意味しません。')
 
   return (
     <Card>
       <CardHeader className="flex flex-row flex-wrap items-start justify-between gap-3 pb-0">
         <div>
-          <CardTitle>{tx('title', '云端受控注册 / 删除')}</CardTitle>
+          <CardTitle>{tx('deploymentTitle', '管理リソースの登録 / 設定配信 / 削除')}</CardTitle>
           <p className="mt-1 text-sm text-muted-foreground">{tx('account', '当前账号：')} {accountName}</p>
         </div>
         <Button type="button" variant="outline" disabled={jobsQuery.isFetching} onClick={refreshAll}>
@@ -112,6 +114,7 @@ export function VendorWritePanel({ accountId, accountName }: VendorWritePanelPro
         <div className="notice text-sm">
           <p className="font-medium">{tx('safetyTitle', '受控写入说明')}</p>
           <p className="mt-1 text-muted-foreground">{tx('safetyWarning', '提交会修改远端云端资源。注册仅表示云端基础注册任务，不代表缓存、回源或 TLS 已完整上线；删除仅允许删除由本面板创建且经后端验证的资源。')}</p>
+          <p className="mt-2 text-muted-foreground">{deployNotice}</p>
           {!canDeploy && <p className="mt-2 text-destructive">{tx('permissionOff', '缺少 vendor:deploy 权限，已禁用提交。')}</p>}
           {capabilitiesQuery.isLoading && <p className="mt-2 text-muted-foreground">{tx('checking', '正在检查后端写入开关…')}</p>}
           {capabilitiesQuery.isError && <p className="mt-2 text-destructive">{errorText(capabilitiesQuery.error, t('common.failed'))} · {tx('capabilityUnavailable', '无法确认后端写入能力，已禁用提交。')}</p>}
@@ -131,6 +134,7 @@ export function VendorWritePanel({ accountId, accountName }: VendorWritePanelPro
               <SelectTrigger id="vendor-write-action"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="register">{actionLabel('register')}</SelectItem>
+                <SelectItem value="deploy" disabled={!deploySupported}>{actionLabel('deploy')}</SelectItem>
                 <SelectItem value="delete">{actionLabel('delete')}</SelectItem>
               </SelectContent>
             </Select>
@@ -138,7 +142,7 @@ export function VendorWritePanel({ accountId, accountName }: VendorWritePanelPro
         </div>
         <ConfirmAction
           title={tx('confirmTitle', '确认提交云端写入任务？')}
-          description={`${tx('confirmAccount', '账号：')} ${accountName}\n${tx('confirmDomainId', 'domainId：')} ${domainId.trim() || '—'}\n${tx('confirmAction', '动作：')} ${actionLabel(action)}\n\n${tx('confirmWarning', '此操作会修改远端资源。注册不代表缓存、回源或 TLS 完整上线；删除仅能针对本面板创建且由后端确认的资源。')}`}
+          description={`${tx('confirmAccount', '账号：')} ${accountName}\n${tx('confirmDomainId', 'domainId：')} ${domainId.trim() || '—'}\n${tx('confirmAction', '动作：')} ${actionLabel(action)}\n\n${tx('confirmWarning', '此操作会修改远端资源。注册不代表缓存、回源或 TLS 完整上线；删除仅能针对本面板创建且由后端确认的资源。')}${action === 'deploy' ? `\n\n${deployNotice}` : ''}`}
           onConfirm={submitConfirmed}
         >
           <Button type="button" disabled={submitDisabled}>{createJob.isPending ? t('common.loading') : tx('submit', '提交受控任务')}</Button>

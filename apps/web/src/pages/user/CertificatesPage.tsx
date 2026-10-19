@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useTranslation } from 'react-i18next'
 import { Trash2 } from 'lucide-react'
@@ -26,7 +26,7 @@ const DEFAULT_HTTPS: HttpsConfig = { httpsEnabled: false, forceHttps: false, hst
 
 export function CertificatesPage() {
   const { t } = useTranslation()
-  const tx = (key: string, fallback: string) => t(`m3.${key}`, { defaultValue: fallback })
+  const tx = useCallback((key: string, fallback: string) => t(`m3.${key}`, { defaultValue: fallback }), [t])
   const qc = useQueryClient()
   const [page, setPage] = useState(1)
   const [jobPage, setJobPage] = useState(1)
@@ -69,13 +69,13 @@ export function CertificatesPage() {
     setCertId(data.certId ?? '')
   }, [httpsQuery.data])
 
-  const invalidate = () => {
+  const invalidate = useCallback(() => {
     void qc.invalidateQueries({ queryKey: ['user', 'certificates'] })
     void qc.invalidateQueries({ queryKey: ['user', 'certificate-jobs'] })
     void qc.invalidateQueries({ queryKey: ['user', 'https', selectedDomain] })
-  }
+  }, [qc, selectedDomain])
   const onError = (e: unknown) => toast.error(e instanceof ApiError ? e.message : t('common.failed'))
-  const applyJobResult = (result: AcmeJob) => {
+  const applyJobResult = useCallback((result: AcmeJob) => {
     const alreadyIssued = jobData?.id === result.id && jobData.status === 'issued'
     setJobData(result)
     setJobId(result.id)
@@ -88,11 +88,11 @@ export function CertificatesPage() {
       invalidate()
       if (!alreadyIssued) toast.success(tx('certificateIssued', 'The certificate was issued successfully.'))
     }
-  }
+  }, [jobData, invalidate, qc, tx])
 
   useEffect(() => {
     if (jobQuery.data) applyJobResult(jobQuery.data)
-  }, [jobQuery.data])
+  }, [applyJobResult, jobQuery.data])
 
   const upload = useMutation({
     mutationFn: () => certificateApi.upload({ name, certPem, keyPem }),

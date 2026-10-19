@@ -68,6 +68,7 @@ function fixture(overrides = {}) {
       findFirst: async ({ where }) => resources.find(r => matches(r, where)) || null,
       findUnique: async ({ where }) => resources.find(r => r.id === where.id) || null,
       create: async ({ data }) => { const row = { id: nextResource++, ...data }; resources.push(row); return row },
+      update: async ({ where, data }) => apply(resources.find(r => r.id === where.id), data),
       delete: async ({ where }) => { const i = resources.findIndex(r => r.id === where.id); if (i >= 0) resources.splice(i, 1); return {} },
     },
   }
@@ -78,7 +79,7 @@ function fixture(overrides = {}) {
   }
   const config = { get: name => name === 'security' ? { encryptionKey: key } : name === 'app.env' ? 'test' : undefined }
   const service = new VendorWriteService(db, config, { create: () => fakeDriver })
-  return { service, db, jobs, resources, account, domain, user, calls }
+  return { service, db, jobs, resources, account, domain, user, calls, key }
 }
 
 function env(t, name, value) {
@@ -156,4 +157,65 @@ test('Alibaba natural resource IDs exceeding local capacity are rejected before 
   await assert.rejects(h.service.create('3', { action: 'register', domainId: '12', idempotencyKey: 'too-long-id' }, '6'), /不超过128字符/)
   assert.equal(h.jobs.length, 0)
   assert.equal(h.calls.length, 0)
+})
+
+function certificateFixture(t, h) {
+  const { mkdtempSync, readFileSync, rmSync } = require('node:fs')
+  const { join } = require('node:path')
+  const { tmpdir } = require('node:os')
+  const { execFileSync } = require('node:child_process')
+  const { X509Certificate } = require('node:crypto')
+  const dir = mkdtempSync(join(tmpdir(), 'lunar-deploy-cert-'))
+  t.after(() => rmSync(dir, { recursive: true, force: true }))
+  execFileSync('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', join(dir, 'key.pem'), '-out', join(dir, 'cert.pem'), '-days', '2', '-subj', '/CN=cdn.example.test', '-addext', 'subjectAltName=DNS:cdn.example.test'], { stdio: 'ignore' })
+  const certPem = readFileSync(join(dir, 'cert.pem'), 'utf8')
+  const privateKeyPem = readFileSync(join(dir, 'key.pem'), 'utf8')
+  const leaf = new X509Certificate(certPem)
+  const row = { id: 9n, userId: h.domain.userId, status: 1, certPem, chainPem: null, keyPem: `enc:v1:${encrypt(privateKeyPem, h.key)}`, notBefore: new Date(leaf.validFrom), notAfter: new Date(leaf.validTo) }
+  h.db.certificate = { findFirst: async ({ where }) => row.id === where.id && row.userId === where.userId && row.status === where.status ? row : null }
+  h.domain.config.httpsEnabled = true
+  h.domain.config.certId = row.id
+  h.resources.push({ id: 42n, vendorAccountId: 3n, domainId: 12n, vendorDomainId: 'managed-42', managedByPanel: true })
+  return { row, certPem, privateKeyPem, fingerprint: leaf.fingerprint256 }
+}
+const serialize = value => JSON.stringify(value, (_, item) => typeof item === 'bigint' ? String(item) : item)
+
+test('certificate deploy decrypts only for execution and persists only public identity and verified feature names', async t => {
+  env(t, 'VENDOR_WRITES_ENABLED', 'true')
+  env(t, 'VENDOR_WRITE_WORKER_ENABLED', 'true')
+  const h = fixture()
+  const cert = certificateFixture(t, h)
+  let sent
+  h.service.factory.create = () => ({
+    deployManagedConfig: async (id, input) => { assert.equal(id, 'managed-42'); sent = input },
+    verifyManagedConfig: async () => ({ verified: true, applied: ['origin', 'cache', 'certificate'], providerStatus: 'online', verifiedAt: new Date().toISOString(), unsafeExtra: cert.privateKeyPem }),
+  })
+  const created = await h.service.create('3', { action: 'deploy', domainId: '12', idempotencyKey: 'cert-deploy' }, '6')
+  assert.equal(h.jobs[0].originSnapshot.certificateFingerprint, cert.fingerprint)
+  assert.equal(serialize(h.jobs).includes('BEGIN'), false)
+  await h.service.tick()
+  assert.equal(h.jobs[0].status, 'succeeded')
+  assert.equal(sent.certificate.privateKeyPem, cert.privateKeyPem)
+  assert.equal(sent.certificate.certificatePem.trim(), cert.certPem.trim())
+  for (const response of [created, await h.service.list('3', 1, 10), h.jobs, h.resources]) {
+    assert.equal(serialize(response).includes(cert.privateKeyPem), false)
+    assert.equal(serialize(response).includes('BEGIN CERTIFICATE'), false)
+    assert.equal(serialize(response).includes('secret-test-token'), false)
+  }
+  assert.deepEqual(h.resources[0].resourceData.verifiedFeatures, ['origin', 'cache', 'certificate'])
+})
+
+test('a revoked or changed certificate is rejected before deployment and cannot be sent to the provider', async t => {
+  env(t, 'VENDOR_WRITES_ENABLED', 'true')
+  env(t, 'VENDOR_WRITE_WORKER_ENABLED', 'true')
+  const h = fixture()
+  const cert = certificateFixture(t, h)
+  let calls = 0
+  h.service.factory.create = () => ({ deployManagedConfig: async () => { calls++ }, verifyManagedConfig: async () => { calls++ } })
+  await h.service.create('3', { action: 'deploy', domainId: '12', idempotencyKey: 'revoked-cert' }, '6')
+  cert.row.status = 0
+  await h.service.tick()
+  assert.equal(calls, 0)
+  assert.equal(h.jobs[0].status, 'failed')
+  assert.equal(h.jobs[0].errorCode, 'CERTIFICATE_INVALID')
 })

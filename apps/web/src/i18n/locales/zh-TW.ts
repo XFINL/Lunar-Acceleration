@@ -494,6 +494,9 @@ export default {
     test: '測試連線', sync: '同步', connected: '連線成功', syncComplete: '唯讀快照同步完成', ignored: '忽略', accountDetails: '所選帳號詳細資料', snapshots: '域名快照', logs: '日誌', remoteStatusNote: '遠端服務商狀態僅供觀察。遠端「待處理」或「線上」不可解讀為本地審核通過、啟用或已部署。', selectAccount: '選擇帳號以查看日誌或快照。', action: '操作', result: '結果', message: '訊息', success: '成功', failure: '失敗', noSnapshots: '尚無域名快照。執行唯讀同步以尋找匹配的本地域名。', localDomain: '本地域名', remoteHostname: '遠端主機名', cname: 'CNAME', providerStatus: '遠端狀態（觀察值）', sslStatus: 'SSL 狀態', syncedAt: '觀察時間', observedOnly: '僅供觀察',
   vendorWrite: {
     "title": "雲端受控註冊／刪除",
+    "deploymentTitle": "受管資源註冊／設定部署／刪除",
+    "deploy": "設定部署與驗證",
+    "deployNotice": "部署僅限受管資源，支援的設定下發後會讀回驗證；不支援的設定會拒絕。驗證成功也不代表已完成實際流量、DNS 或 TLS 連線驗收，不會自動上線。",
     "account": "目前帳號：",
     "created": "受控寫入工作已加入佇列",
     "retried": "已提交重試",

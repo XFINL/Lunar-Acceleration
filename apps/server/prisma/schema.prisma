@@ -35,8 +35,8 @@ model User {
   twoFaSecret     String?   @map("two_fa_secret") @db.VarChar(64)
   lastLoginAt     DateTime? @map("last_login_at") @db.DateTime
   lastLoginIp     String?   @map("last_login_ip") @db.VarChar(64)
-  createdAt       DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt       DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
   deletedAt       DateTime? @map("deleted_at") @db.DateTime
 
   userRoles    UserRole[]
@@ -65,7 +65,7 @@ model Role {
   description String?  @db.VarChar(255)
   /// 1系统内置 0自定义
   isSystem    Int      @default(0) @map("is_system") @db.TinyInt
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   permissions RolePermission[]
   users       UserRole[]
@@ -81,7 +81,7 @@ model Permission {
   code      String   @unique @db.VarChar(128)
   resource  String   @db.VarChar(64)
   action    String   @db.VarChar(32)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   roles RolePermission[]
 
@@ -127,7 +127,7 @@ model UserApiKey {
   status     Int       @default(1) @db.TinyInt
   expireAt   DateTime? @map("expire_at") @db.DateTime
   lastUsedAt DateTime? @map("last_used_at") @db.DateTime
-  createdAt  DateTime  @default(now()) @map("created_at") @db.DateTime
+  createdAt  DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -146,7 +146,7 @@ model UserLoginLog {
   /// 1成功 0失败
   status    Int      @db.TinyInt
   message   String?  @db.VarChar(255)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -168,7 +168,7 @@ model UserBalance {
   refId        BigInt?  @map("ref_id") @db.UnsignedBigInt
   remark       String?  @db.VarChar(255)
   operatorId   BigInt?  @map("operator_id") @db.UnsignedBigInt
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt    DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -206,8 +206,8 @@ model Package {
   /// 0下架 1上架
   status          Int      @default(1) @db.TinyInt
   sort            Int      @default(0)
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt       DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt       DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt       DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   userPackages UserPackage[]
   orders       Order[]
@@ -236,7 +236,7 @@ model UserPackage {
   orderId        BigInt?   @unique @map("order_id") @db.UnsignedBigInt
   /// 1生效 2过期 3取消
   status         Int       @default(1) @db.TinyInt
-  createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime
+  createdAt      DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   package Package @relation(fields: [packageId], references: [id])
@@ -264,8 +264,8 @@ model Order {
   status      Int       @default(1) @db.TinyInt
   payChannel  String?   @map("pay_channel") @db.VarChar(32)
   payAt       DateTime? @map("pay_at") @db.DateTime
-  createdAt   DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt   DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   user     User        @relation(fields: [userId], references: [id], onDelete: Cascade)
   package  Package?    @relation(fields: [packageId], references: [id])
@@ -308,8 +308,8 @@ model Payment {
   /// 1待支付 2成功 3失败 4已退款
   status       Int      @default(1) @db.TinyInt
   callbackData Json?    @map("callback_data")
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt    DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt    DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt    DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   order Order @relation(fields: [orderId], references: [id], onDelete: Cascade)
   user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -328,8 +328,8 @@ model PaymentChannel {
   config    Json?
   /// 0禁用 1启用
   status    Int      @default(0) @db.TinyInt
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   @@map("payment_channels")
 }
@@ -345,7 +345,7 @@ model Transaction {
   refType      String?  @map("ref_type") @db.VarChar(32)
   refId        BigInt?  @map("ref_id") @db.UnsignedBigInt
   remark       String?  @db.VarChar(255)
-  createdAt    DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt    DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -365,7 +365,7 @@ model SiteConfig {
   configKey   String   @map("config_key") @db.VarChar(128)
   configValue Json?    @map("config_value")
   description String?  @db.VarChar(255)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  updatedAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   @@unique([groupKey, configKey], name: "uk_group_key")
   @@index([groupKey])
@@ -383,7 +383,7 @@ model SystemConfig {
   configKey   String   @map("config_key") @db.VarChar(128)
   configValue Json?    @map("config_value")
   description String?  @db.VarChar(255)
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  updatedAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   @@unique([groupKey, configKey], name: "uk_group_key")
   @@map("system_configs")
@@ -406,7 +406,7 @@ model AuditLog {
   after      Json?
   ip         String?  @db.VarChar(64)
   ua         String?  @db.VarChar(512)
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt  DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
@@ -436,8 +436,8 @@ model Domain {
   businessType String    @default("static") @map("business_type") @db.VarChar(32)
   tags         Json?
   remark       String?   @db.VarChar(255)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt    DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt    DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
   deletedAt    DateTime? @map("deleted_at") @db.DateTime
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -465,7 +465,7 @@ model DomainConfig {
   hstsEnabled   Boolean  @default(false) @map("hsts_enabled")
   hstsMaxAge    Int      @default(31536000) @map("hsts_max_age")
   tlsVersion    String   @default("TLSv1.2") @map("tls_version") @db.VarChar(16)
-  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  updatedAt     DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
 
   domain      Domain       @relation(fields: [domainId], references: [id], onDelete: Cascade)
   certificate Certificate? @relation(fields: [certId], references: [id], onDelete: SetNull)
@@ -487,7 +487,7 @@ model CacheRule {
   ignoreParams  Boolean  @default(true) @map("ignore_params")
   cacheKey      String?  @map("cache_key") @db.VarChar(512)
   status        Int      @default(1) @db.TinyInt
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt     DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
 
@@ -501,7 +501,7 @@ model OriginGroup {
   name        String   @db.VarChar(64)
   lbPolicy    String   @default("round_robin") @map("lb_policy") @db.VarChar(32)
   healthCheck Json?    @map("health_check")
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   domain  Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
   origins Origin[]
@@ -520,7 +520,7 @@ model Origin {
   protocol      String   @default("http") @db.VarChar(16)
   host          String?  @db.VarChar(253)
   status        Int      @default(1) @db.TinyInt
-  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt     DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   group OriginGroup @relation(fields: [originGroupId], references: [id], onDelete: Cascade)
 
@@ -546,7 +546,7 @@ model Certificate {
   lastRenewedAt DateTime? @map("last_renewed_at") @db.DateTime
   renewalError String? @map("renewal_error") @db.VarChar(512)
   status     Int      @default(1) @db.TinyInt
-  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt  DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
 
   user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   configs DomainConfig[]
@@ -570,8 +570,8 @@ model CertificateJob {
   csr String? @db.Text
   error String? @db.VarChar(512)
   expiresAt DateTime? @map("expires_at") @db.DateTime
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
   @@index([userId,status])
   @@index([certificateId])
   @@index([expiresAt])
@@ -588,8 +588,8 @@ model Vendor {
   description String?  @db.VarChar(512)
   status      Int      @default(1) @db.TinyInt
   sort        Int      @default(0)
-  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
   accounts    VendorAccount[]
 
   @@map("vendors")
@@ -607,8 +607,8 @@ model VendorAccount {
   credentialVersion  Int       @default(1) @map("credential_version")
   operationToken     String?   @map("operation_token") @db.VarChar(36)
   operationExpiresAt DateTime? @map("operation_expires_at") @db.DateTime
-  createdAt          DateTime  @default(now()) @map("created_at") @db.DateTime
-  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt          DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt          DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
   vendor             Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
   resources          VendorResource[]
   logs               VendorSyncLog[]
@@ -644,7 +644,7 @@ model VendorSyncLog {
   /// 1成功，2失败；仅记录脱敏说明。
   status          Int      @db.TinyInt
   message         String?  @db.Text
-  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
+  createdAt       DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
   account         VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Cascade)
 
   @@index([vendorAccountId])
@@ -665,13 +665,13 @@ model VendorWriteJob {
   originSnapshot Json? @map("origin_snapshot")
   externalId String? @map("external_id") @db.VarChar(128)
   attempts Int @default(0)
-  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.DateTime
+  nextAttemptAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("next_attempt_at") @db.DateTime
   leaseToken String? @map("lease_token") @db.VarChar(36)
   leaseExpiresAt DateTime? @map("lease_expires_at") @db.DateTime
   errorCode String? @map("error_code") @db.VarChar(64)
   message String? @db.VarChar(255)
-  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
-  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
   account VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Restrict)
   domain Domain @relation(fields: [domainId], references: [id], onDelete: Restrict)
   @@index([status,nextAttemptAt])

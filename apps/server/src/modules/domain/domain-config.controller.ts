@@ -19,6 +19,7 @@ class DomainConfigDto {
 }
 function normalizeOriginHost(value?: string): string | undefined {
  if (value === undefined) return undefined
+ // eslint-disable-next-line no-control-regex -- Control characters are rejected as part of validating a hostname.
  if (!value || value.length > 253 || /[\s\x00-\x1f\x7f/:?#@]/.test(value)) throw new BusinessException(ErrorCode.PARAM_INVALID, 'originHost 格式错误')
  if (isIP(value)) return value
  return normalizeDomain(value)

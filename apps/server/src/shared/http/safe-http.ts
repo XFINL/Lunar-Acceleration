@@ -38,6 +38,7 @@ function validDnsName(host: string): boolean {
 }
 
 function validPath(path: string): boolean {
+  // eslint-disable-next-line no-control-regex -- Control characters are deliberately rejected before constructing the outbound request path.
   return typeof path === 'string' && path.length > 0 && path.length <= 2048 && path.startsWith('/') && !path.startsWith('//') && !/[\r\n\x00#]/.test(path) && !path.includes('://') && !/[\u0000-\u001f\u007f]/.test(path)
 }
 

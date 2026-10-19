@@ -411,6 +411,7 @@ export class DomainResourceService {
     if (value === null) return null
     if (!this.isRecord(value)) return this.invalid('healthCheck 必须为受限结构对象')
     this.assertKeys(value, ['enabled', 'path', 'interval', 'timeout', 'expectedStatus'])
+    // eslint-disable-next-line no-control-regex -- This pattern intentionally rejects control characters from a user-supplied health-check path.
     if (Object.keys(value).length !== 5 || typeof value.enabled !== 'boolean' || typeof value.path !== 'string' || !/^\//.test(value.path) || value.path.startsWith('//') || /[\r\n\x00#]/.test(value.path) || value.path.includes('://') || value.path.length > 2048 || !Number.isInteger(value.interval) || (value.interval as number) < 5 || (value.interval as number) > 3600 || !Number.isInteger(value.timeout) || (value.timeout as number) < 1 || (value.timeout as number) > 5 || !Number.isInteger(value.expectedStatus) || (value.expectedStatus as number) < 100 || (value.expectedStatus as number) > 599) {
       return this.invalid('healthCheck 字段或范围无效（timeout最大5秒，path不得包含//、fragment或控制字符）')
     }

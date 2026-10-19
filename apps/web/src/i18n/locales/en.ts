@@ -494,6 +494,9 @@ export default {
     test: 'Test', sync: 'Sync', connected: 'Connection successful', syncComplete: 'Read-only snapshot sync complete', ignored: 'ignored', accountDetails: 'Selected account details', snapshots: 'Domain snapshots', logs: 'Logs', remoteStatusNote: 'Remote provider status is an observation only. A remote “pending” or “online” state must not be interpreted as local approval, activation, or deployment.', selectAccount: 'Select an account to view logs or snapshots.', action: 'Action', result: 'Result', message: 'Message', success: 'Success', failure: 'Failure', noSnapshots: 'No domain snapshots yet. Run a read-only sync to discover matching local domains.', localDomain: 'Local domain', remoteHostname: 'Remote hostname', cname: 'CNAME', providerStatus: 'Remote status (observation)', sslStatus: 'SSL status', syncedAt: 'Observed at', observedOnly: 'observed only',
   vendorWrite: {
     "title": "Controlled cloud registration / deletion",
+    "deploymentTitle": "Managed resource registration / deployment / deletion",
+    "deploy": "Deploy and verify configuration",
+    "deployNotice": "Deployment targets managed resources only and reads supported settings back after writing. Unsupported settings are rejected. Successful verification does not validate live traffic, DNS or TLS connectivity, and never automatically brings a domain online.",
     "account": "Account:",
     "created": "Controlled write job queued.",
     "retried": "Retry submitted.",

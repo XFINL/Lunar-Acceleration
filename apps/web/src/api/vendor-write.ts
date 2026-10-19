@@ -1,11 +1,12 @@
 import { request } from './client'
 
-export type VendorWriteAction = 'register' | 'delete'
+export type VendorWriteAction = 'register' | 'deploy' | 'delete'
 export type VendorWriteJobStatus = 'queued' | 'running' | 'retry_wait' | 'succeeded' | 'failed' | 'needs_review' | string
 
 export interface VendorWriteCapabilities {
   writesEnabled: boolean
   workerEnabled: boolean
+  supportedActions?: VendorWriteAction[]
   [key: string]: unknown
 }
 
