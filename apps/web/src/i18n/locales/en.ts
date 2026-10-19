@@ -487,6 +487,14 @@ export default {
     "backupRoleHint": "Unchecked means primary.",
     "roleChangeHint": "Changing the role swaps the other origin."
   },
+  statistics: {
+    title: 'Traffic statistics', description: 'Read-only traffic from persisted hourly observations.', permissionDenied: 'You do not have the statistics:read permission.',
+    recentWindow: 'Last 24 completed UTC hours; the current hour is excluded.',
+    domain: 'Domain', allDomains: 'All domains', coverage: 'Only observed intervals are shown; missing intervals are not filled with zero.',
+    loading: 'Loading traffic statistics…', total: 'Total traffic', timeUtc: 'Time (UTC)', bytes: 'Bytes',
+    noData: 'No collection data has been received yet.', noDataDescription: 'No data is not the same as zero traffic.',
+    noObservedIntervals: 'No observed intervals in this period.', retry: 'Retry', loadFailed: 'Could not load traffic statistics.',
+  },
   m4: {
     title: 'Vendor & account management', description: 'Manage provider definitions and credentials for read-only domain inventory synchronization.', safetyTitle: 'Controlled write milestone', safetyNotice: 'Read-only synchronization plus explicitly enabled controlled basic registration/deletion; nothing is automatically brought online. Remote pending/online status does not mean a domain is fully live in this panel.',
     providers: 'Providers', providerName: 'Provider name', driver: 'Driver', descriptionField: 'Description', sort: 'Sort', addVendor: 'Add provider', editProvider: 'Edit provider', providerCode: 'Provider code', codeImmutable: 'Provider code cannot be changed after creation.', deleteVendorConfirm: 'Delete this provider? The server may reject it if referenced by an account or package.',

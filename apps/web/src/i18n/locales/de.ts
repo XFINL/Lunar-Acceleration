@@ -487,6 +487,14 @@ export default {
     "backupRoleHint": "Nicht ausgewählt bedeutet primärer Origin.",
     "roleChangeHint": "Beim Ändern der Rolle wird die Rolle des anderen Origins getauscht."
   },
+  statistics: {
+    title: 'Traffic-Statistiken', description: 'Schreibgeschützte Anzeige gespeicherter stündlicher Beobachtungen.', permissionDenied: 'Die Berechtigung statistics:read fehlt.',
+    recentWindow: 'Die letzten 24 abgeschlossenen UTC-Stunden, ohne die aktuelle Stunde.',
+    domain: 'Domain', allDomains: 'Alle Domains', coverage: 'Es werden nur beobachtete Intervalle angezeigt; fehlende Daten werden nicht mit 0 aufgefüllt.',
+    loading: 'Traffic-Statistiken werden geladen…', total: 'Gesamter Traffic', timeUtc: 'Zeit (UTC)', bytes: 'Bytes',
+    noData: 'Es wurden noch keine Messdaten empfangen.', noDataDescription: 'Keine Daten bedeuten nicht, dass der Traffic null ist.',
+    noObservedIntervals: 'In diesem Zeitraum gibt es keine beobachteten Intervalle.', retry: 'Erneut versuchen', loadFailed: 'Traffic-Statistiken konnten nicht geladen werden.',
+  },
   m4: {
     title: 'Anbieter- und Kontoverwaltung', description: 'Anbieterdefinitionen und Zugangsdaten für den schreibgeschützten Abgleich des Domainbestands verwalten.', safetyTitle: 'Meilenstein für kontrollierte Schreibvorgänge', safetyNotice: 'Schreibgeschützter Abgleich plus ausdrücklich aktivierte kontrollierte grundlegende Registrierung/Löschung; nichts wird automatisch live geschaltet. Remote-Status „pending/online“ bedeutet nicht, dass eine Domain in diesem Panel vollständig live ist.',
     providers: 'Anbieter', providerName: 'Anbietername', driver: 'Treiber', descriptionField: 'Beschreibung', sort: 'Sortierung', addVendor: 'Anbieter hinzufügen', editProvider: 'Anbieter bearbeiten', providerCode: 'Anbietercode', codeImmutable: 'Der Anbietercode kann nach der Erstellung nicht geändert werden.', deleteVendorConfirm: 'Diesen Anbieter löschen? Der Server kann ablehnen, wenn ein Konto oder Paket darauf verweist.',

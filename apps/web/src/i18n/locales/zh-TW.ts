@@ -487,6 +487,14 @@ export default {
     "backupRoleHint": "未勾選代表主要源站。",
     "roleChangeHint": "變更角色時會交換另一個源站的角色。"
   },
+  statistics: {
+    title: '流量統計', description: '唯讀顯示已保存的每小時觀測資料。', permissionDenied: '你沒有 statistics:read 權限。',
+    recentWindow: '最近 24 個已結束的 UTC 小時，不含目前小時。',
+    domain: '網域', allDomains: '全部網域', coverage: '只顯示已觀測時段；缺少資料的時段不補 0。',
+    loading: '正在載入流量統計…', total: '總流量', timeUtc: '時間（UTC）', bytes: '位元組',
+    noData: '尚未收到採集資料。', noDataDescription: '沒有資料不代表流量為零。',
+    noObservedIntervals: '此期間沒有已觀測時段。', retry: '重試', loadFailed: '無法載入流量統計。',
+  },
   m4: {
     title: '廠商與帳號管理', description: '管理服務商定義及用於唯讀同步域名清單的憑證。', safetyTitle: '受控寫入階段', safetyNotice: '唯讀同步加上明確啟用的受控基礎註冊／刪除；不會自動上線。遠端 pending／online 狀態不代表域名已在此面板完整上線。',
     providers: '服務商', providerName: '服務商名稱', driver: '驅動程式', descriptionField: '描述', sort: '排序', addVendor: '新增服務商', editProvider: '編輯服務商', providerCode: '服務商代碼', codeImmutable: '建立後不可變更服務商代碼。', deleteVendorConfirm: '確定刪除此服務商？若帳號或套餐仍有引用，伺服器會拒絕刪除。',

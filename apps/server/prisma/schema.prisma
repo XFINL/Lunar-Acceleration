@@ -50,6 +50,7 @@ model User {
   transactions Transaction[]
   domains      Domain[]
   certificates Certificate[]
+  trafficStatsHourly TrafficStatHourly[]
 
   @@index([status])
   @@index([packageId])
@@ -446,12 +447,31 @@ model Domain {
   originGroups OriginGroup[]
   vendorResources VendorResource[]
   vendorWriteJobs VendorWriteJob[]
+  trafficStatsHourly TrafficStatHourly[]
 
   @@index([userId])
   @@index([status])
   @@index([auditStatus])
   @@index([createdAt])
   @@map("domains")
+}
+
+/// 已觀測到的逐小時流量快照；日統計由此表聚合。
+model TrafficStatHourly {
+  userId    BigInt   @map("user_id") @db.UnsignedBigInt
+  domainId  BigInt   @map("domain_id") @db.UnsignedBigInt
+  statTime  DateTime @map("stat_time") @db.DateTime(0)
+  source    String   @db.VarChar(16)
+  traffic   BigInt   @db.UnsignedBigInt
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([domainId, source, statTime])
+  @@index([userId, statTime])
+  @@index([domainId, statTime])
+  @@map("traffic_stats_hourly")
 }
 
 model DomainConfig {

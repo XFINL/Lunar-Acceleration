@@ -8,6 +8,7 @@ import { DomainModule } from './modules/domain/domain.module'
 import { DomainConfigModule } from './modules/domain/domain-config.module'
 import { CertificateModule } from './modules/certificate/certificate.module'
 import { VendorModule } from './modules/vendor/vendor.module'
+import { StatisticsModule } from './modules/statistics/statistics.module'
 import { DomainResourceModule } from './modules/domain-resource/domain-resource.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { OrderModule } from './modules/order/order.module'
@@ -59,6 +60,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware'
     DomainResourceModule,
     CertificateModule,
     VendorModule,
+    StatisticsModule,
   ],
   providers: [
     // 限流 -> 认证
