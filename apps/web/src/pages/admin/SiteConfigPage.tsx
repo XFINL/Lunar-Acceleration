@@ -41,7 +41,7 @@ function resolveValue(original: unknown, edited: unknown): unknown {
     try {
       return JSON.parse(edited) as unknown
     } catch {
-      return original
+      throw new Error('JSON 格式无效，请修正后再保存')
     }
   }
   return typeof edited === 'string' ? edited : String(edited)
@@ -101,6 +101,10 @@ export function ConfigEditor({
   const currentGroup = activeGroup || groups[0]?.key || ''
   const currentItems = groups.find((group) => group.key === currentGroup)?.items ?? []
   const changedCount = currentItems.filter((item) => item.configKey in edits).length
+  const hasInvalidJson = currentItems.some((item) => {
+    if (!(item.configKey in edits) || valueType(item.configValue) !== 'json') return false
+    try { JSON.parse(String(edits[item.configKey])); return false } catch { return true }
+  })
 
   const saveMutation = useMutation({
     mutationFn: () => {
@@ -157,7 +161,7 @@ export function ConfigEditor({
   }
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader title={title} description={description} />
 
       {isLoading ? (
@@ -170,7 +174,7 @@ export function ConfigEditor({
         </Card>
       ) : (
         <>
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+          <div className="section-heading flex-wrap">
             <Tabs
               value={currentGroup}
               onValueChange={(value) => {
@@ -180,10 +184,11 @@ export function ConfigEditor({
               }}
               items={groups.map((group) => ({ value: group.key, label: group.key }))}
             />
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="data-actions">
               {action ? (
                 <>
                   <Input
+                    aria-label={action.label}
                     className="w-56"
                     placeholder={action.placeholder}
                     value={actionInput}
@@ -199,7 +204,7 @@ export function ConfigEditor({
                 </>
               ) : null}
               <Button
-                disabled={changedCount === 0 || saveMutation.isPending}
+                disabled={changedCount === 0 || saveMutation.isPending || hasInvalidJson}
                 onClick={() => saveMutation.mutate()}
               >
                 {changedCount > 0
@@ -218,35 +223,42 @@ export function ConfigEditor({
                 return (
                   <div
                     key={item.configKey}
-                    className="grid gap-2 border-b py-4 last:border-b-0 sm:grid-cols-[18rem_1fr] sm:items-start"
+                    className="form-grid border-b py-4 last:border-b-0"
                   >
-                    <div className="space-y-1">
-                      <Label className="font-mono text-xs">{item.configKey}</Label>
+                    <div className="form-field">
+                      <Label htmlFor={`config-${queryKey}-${item.configKey}`} className="font-mono text-xs">{item.configKey}</Label>
                       {item.description ? (
                         <p className="text-xs text-muted-foreground">{item.description}</p>
                       ) : null}
                     </div>
-                    <div>
+                    <div className="form-field">
                       {type === 'boolean' ? (
+                        <label className="control-row">
                         <Switch
+                          id={`config-${queryKey}-${item.configKey}`}
                           checked={Boolean(current)}
                           onCheckedChange={(checked) => setEdit(item.configKey, checked)}
                         />
+                        <span>{t('common.enabled')}</span>
+                        </label>
                       ) : type === 'number' ? (
                         <Input
+                          id={`config-${queryKey}-${item.configKey}`}
                           type="number"
                           value={serialize(current)}
                           onChange={(event) => setEdit(item.configKey, event.target.value)}
                         />
                       ) : type === 'json' ? (
                         <Textarea
+                          id={`config-${queryKey}-${item.configKey}`}
                           className="font-mono text-xs"
                           value={typeof current === 'string' ? current : serialize(current)}
                           onChange={(event) => setEdit(item.configKey, event.target.value)}
                         />
                       ) : (
-                        <div className="flex items-center gap-2">
+                        <div className="control-row flex-wrap">
                           <Input
+                            id={`config-${queryKey}-${item.configKey}`}
                             value={serialize(current)}
                             onChange={(event) => setEdit(item.configKey, event.target.value)}
                           />
@@ -273,6 +285,9 @@ export function ConfigEditor({
                           ) : null}
                         </div>
                       )}
+                      {type === 'json' && item.configKey in edits && hasInvalidJson ? (
+                        <p className="mt-1 text-xs text-destructive">JSON 格式无效，修正后才能保存。</p>
+                      ) : null}
                     </div>
                   </div>
                 )

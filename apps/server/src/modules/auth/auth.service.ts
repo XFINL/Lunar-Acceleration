@@ -10,6 +10,7 @@ import type { AuthUser, JwtPayload } from '../../common/interfaces/auth-user.int
 import { hashPassword, verifyPassword } from '../../common/utils/password.util'
 import { PrismaService } from '../../database/prisma.service'
 import { RedisService } from '../../shared/redis/redis.service'
+import { SettingService } from '../setting/setting.service'
 import { RbacService } from '../rbac/rbac.service'
 import type { LoginDto, RegisterDto } from './dto/auth.dto'
 
@@ -34,6 +35,7 @@ export class AuthService {
     private readonly rbacService: RbacService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly settingService: SettingService,
   ) {}
 
   // ============ 验证码 ============
@@ -127,7 +129,18 @@ export class AuthService {
   }
 
   async register(dto: RegisterDto, ip: string, ua: string) {
-    await this.assertCaptcha(dto.captchaId, dto.captcha)
+    if (await this.settingService.getRegistrationConfig('registerOpen', 'open') === false) {
+      throw new BusinessException(ErrorCode.PARAM_INVALID, '当前暂不开放注册')
+    }
+    if (await this.settingService.getRegistrationConfig('registerNeedCaptcha', 'needCaptcha') !== false) {
+      await this.assertCaptcha(dto.captchaId, dto.captcha)
+    }
+    if (await this.settingService.getRegistrationConfig('registerNeedEmail', 'needEmail') === true && !dto.email) {
+      throw new BusinessException(ErrorCode.PARAM_INVALID, '注册必须填写邮箱')
+    }
+    if (await this.settingService.getRegistrationConfig('inviteRequired', 'inviteRequired') === true && !dto.inviteCode) {
+      throw new BusinessException(ErrorCode.PARAM_INVALID, '注册必须填写邀请码')
+    }
 
     const duplicate = await this.prisma.user.findFirst({
       where: {

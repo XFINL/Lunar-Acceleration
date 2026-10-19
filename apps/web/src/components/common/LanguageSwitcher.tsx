@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next'
 import { RoleType } from '@lunar/shared'
-import { Select } from '@/components/ui/select'
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { changeLocale } from '@/i18n'
 import { useAuthStore } from '@/stores/auth'
 import type { Locale } from '@lunar/shared'
@@ -15,18 +15,13 @@ const LOCALE_LABELS: Record<Locale, string> = {
 export function LanguageSwitcher() {
   const { i18n } = useTranslation()
   return (
-    <Select
-      aria-label="language"
-      className="h-8 w-[8.5rem]"
-      value={i18n.language}
-      onChange={(event) => changeLocale(event.target.value as Locale)}
-    >
+    <SelectRoot value={i18n.language} onValueChange={(event) => changeLocale(event as Locale)}><SelectTrigger id="languageswitcher-select-1" className="w-[7rem] shrink-0 text-sm sm:w-[8.5rem] md:text-sm" aria-label="language"><SelectValue /></SelectTrigger><SelectContent>
       {(Object.keys(LOCALE_LABELS) as Locale[]).map((locale) => (
-        <option key={locale} value={locale}>
+        <SelectItem key={locale} value={locale}>
           {LOCALE_LABELS[locale]}
-        </option>
+        </SelectItem>
       ))}
-    </Select>
+    </SelectContent></SelectRoot>
   )
 }
 

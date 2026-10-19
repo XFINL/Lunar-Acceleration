@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Copy, KeyRound, Plus, Trash2 } from 'lucide-react'
+import { Copy, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import { userApi } from '@/api/user'
@@ -30,6 +30,7 @@ import {
 import { EmptyState } from '@/components/common/EmptyState'
 import { Loading } from '@/components/common/Loading'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ConfirmAction } from '@/components/common/ConfirmAction'
 
 const QUERY_KEY = ['user', 'api-keys']
 
@@ -75,13 +76,13 @@ export function ApiKeysPage() {
   }
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('user.apiKeys')}
         description={t('user.apiKeysDesc')}
         actions={
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
+
             {t('user.createApiKey')}
           </Button>
         }
@@ -109,7 +110,7 @@ export function ApiKeysPage() {
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">
                       <span className="flex items-center gap-2">
-                        <KeyRound className="h-3.5 w-3.5 text-muted-foreground" />
+
                         {item.name}
                       </span>
                     </TableCell>
@@ -120,7 +121,7 @@ export function ApiKeysPage() {
                         className="flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-foreground"
                       >
                         {item.accessKey}
-                        <Copy className="h-3 w-3" />
+
                       </button>
                     </TableCell>
                     <TableCell>
@@ -137,18 +138,17 @@ export function ApiKeysPage() {
                         : t('user.neverUsed')}
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => {
-                          if (window.confirm(t('user.deleteKeyConfirm'))) {
-                            removeMutation.mutate(item.id)
-                          }
-                        }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <div className="data-actions">
+                      <ConfirmAction title={t('common.delete')} description={t('user.deleteKeyConfirm')} onConfirm={() => removeMutation.mutate(item.id)}>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          disabled={removeMutation.isPending}
+                          aria-label={t('common.delete')}
+                        ><Trash2 className="h-4 w-4" /></Button>
+                      </ConfirmAction>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -164,7 +164,7 @@ export function ApiKeysPage() {
             <DialogTitle>{t('user.createApiKey')}</DialogTitle>
             <DialogDescription>{t('user.apiKeysDesc')}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
+          <div className="form-field">
             <Label htmlFor="keyName">{t('user.keyName')}</Label>
             <Input
               id="keyName"
@@ -194,22 +194,22 @@ export function ApiKeysPage() {
             <DialogDescription>{t('user.secretTip')}</DialogDescription>
           </DialogHeader>
           {created ? (
-            <div className="space-y-3">
-              <div className="space-y-1">
+            <div className="form-grid">
+              <div className="form-field">
                 <Label>{t('user.accessKey')}</Label>
                 <div className="flex items-center gap-2">
                   <Input readOnly value={created.accessKey} className="font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={() => void copy(created.accessKey)}>
-                    <Copy className="h-3.5 w-3.5" />
+                  <Button variant="outline" size="icon" onClick={() => void copy(created.accessKey)} aria-label={t('common.copy')}><Copy className="h-4 w-4" />
+
                   </Button>
                 </div>
               </div>
-              <div className="space-y-1">
+              <div className="form-field">
                 <Label>{t('user.secretKey')}</Label>
                 <div className="flex items-center gap-2">
                   <Input readOnly value={created.secretKey} className="font-mono text-xs" />
-                  <Button variant="outline" size="icon" onClick={() => void copy(created.secretKey)}>
-                    <Copy className="h-3.5 w-3.5" />
+                  <Button variant="outline" size="icon" onClick={() => void copy(created.secretKey)} aria-label={t('common.copy')}><Copy className="h-4 w-4" />
+
                   </Button>
                 </div>
               </div>

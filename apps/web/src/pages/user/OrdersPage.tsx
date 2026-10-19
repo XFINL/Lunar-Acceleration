@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -123,26 +123,22 @@ export function OrdersPage() {
   })
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader title={t('orders.title')} description={t('orders.desc')} />
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <Select
-            className="w-[10rem]"
-            value={statusFilter}
-            onChange={(event) => {
+      <Card>
+        <CardContent className="filter-toolbar p-4 md:p-6">
+          <SelectRoot value={statusFilter || "__radix_select_empty__"} onValueChange={(event) => {
               setPage(1)
-              setStatusFilter(event.target.value)
-            }}
-          >
-            <option value="">{t('orders.status')}: {t('common.all')}</option>
+              setStatusFilter(event === "__radix_select_empty__" ? '' : event)
+            }}><SelectTrigger id="orderspage-select-1" className="w-[10rem]" aria-label={t('orders.status')}><SelectValue /></SelectTrigger><SelectContent>
+            <SelectItem value="__radix_select_empty__">{t('orders.status')}: {t('common.all')}</SelectItem>
             {STATUS_OPTIONS.map((status) => (
-              <option key={status} value={status}>
+              <SelectItem key={status} value={String(status)}>
                 {ORDER_STATUS_MAP[status]}
-              </option>
+              </SelectItem>
             ))}
-          </Select>
+          </SelectContent></SelectRoot>
           <Button
             variant="ghost"
             onClick={() => {
@@ -189,7 +185,7 @@ export function OrdersPage() {
                         {new Date(order.createdAt).toLocaleString()}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="data-actions">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -363,15 +359,15 @@ export function OrdersPage() {
             <DialogDescription>{payTarget?.orderNo}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>{t('orders.chooseChannel')}</Label>
-              <Select value={channel} onChange={(event) => setChannel(event.target.value as PayChannel)}>
+            <div className="form-field">
+              <Label htmlFor="orderspage-select-2">{t('orders.chooseChannel')}</Label>
+              <SelectRoot value={channel} onValueChange={(event) => setChannel(event as PayChannel)}><SelectTrigger id="orderspage-select-2" aria-label={t('orders.chooseChannel')}><SelectValue /></SelectTrigger><SelectContent>
                 {PAY_CHANNELS.map((item) => (
-                  <option key={item} value={item}>
+                  <SelectItem key={item} value={item}>
                     {PAY_CHANNEL_MAP[item]}
-                  </option>
+                  </SelectItem>
                 ))}
-              </Select>
+              </SelectContent></SelectRoot>
             </div>
             <p className="text-xs text-muted-foreground">{t('orders.mockPayHint')}</p>
           </div>

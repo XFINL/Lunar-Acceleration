@@ -4,7 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { adminApi } from '@/api/admin'
 import { Badge } from '@/components/ui/badge'
 import { Card, CardContent } from '@/components/ui/card'
-import { Select } from '@/components/ui/select'
+import { SelectRoot as Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -33,26 +33,22 @@ export function AuditPage() {
   })
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('admin.audit')}
         description={t('admin.auditDesc')}
         actions={
-          <Select
-            className="w-40"
-            value={module}
-            onChange={(event) => {
-              setModule(event.target.value)
+          <Select value={module || "__radix_select_empty__"} onValueChange={(event) => {
+              setModule(event === "__radix_select_empty__" ? '' : event)
               setPage(1)
-            }}
-          >
-            <option value="">{t('admin.moduleAll')}</option>
+            }}><SelectTrigger id="auditpage-select-1" className="w-40" aria-label={t('admin.module')}><SelectValue /></SelectTrigger><SelectContent>
+            <SelectItem value="__radix_select_empty__">{t('admin.moduleAll')}</SelectItem>
             {MODULES.map((item) => (
-              <option key={item} value={item}>
+              <SelectItem key={item} value={item}>
                 {item}
-              </option>
+              </SelectItem>
             ))}
-          </Select>
+          </SelectContent></Select>
         }
       />
 
@@ -88,7 +84,7 @@ export function AuditPage() {
                       <TableCell className="text-xs text-muted-foreground">
                         {item.targetType ? `${item.targetType}#${item.targetId ?? '-'}` : '-'}
                       </TableCell>
-                      <TableCell className="font-mono text-xs">{item.userId ?? '-'}</TableCell>
+                      <TableCell className="numeric font-mono text-xs">{item.userId ?? '-'}</TableCell>
                       <TableCell className="font-mono text-xs">{item.ip ?? '-'}</TableCell>
                     </TableRow>
                   ))}

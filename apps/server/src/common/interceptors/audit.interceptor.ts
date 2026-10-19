@@ -56,10 +56,18 @@ export class AuditInterceptor implements NestInterceptor {
   /** 移除敏感字段，避免写入审计 */
   private sanitize(data: unknown): Record<string, unknown> | null {
     if (!data || typeof data !== 'object') return null
-    const clone: Record<string, unknown> = { ...(data as Record<string, unknown>) }
-    for (const key of ['password', 'passwordHash', 'secretKey', 'accessKey', 'token']) {
-      if (key in clone) clone[key] = '***'
+    const sensitive = /password|pass$|secret|token|private.?key|key.?pem|cert.?pem|access.?key|credential/i
+    const redact = (value: unknown, depth = 0): unknown => {
+      if (depth > 12) return '[truncated]'
+      if (Array.isArray(value)) return value.map((item) => redact(item, depth + 1))
+      if (!value || typeof value !== 'object' || value instanceof Date) return value
+      const object = value as Record<string, unknown>
+      const secretConfig = typeof object.configKey === 'string' && sensitive.test(object.configKey)
+      return Object.fromEntries(Object.entries(object).map(([key, item]) => [
+        key,
+        sensitive.test(key) || (secretConfig && key === 'configValue') ? '***' : redact(item, depth + 1),
+      ]))
     }
-    return clone
+    return redact(data) as Record<string, unknown>
   }
 }

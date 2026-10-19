@@ -1,0 +1,38 @@
+/* Only explicitly opted-in navigation surfaces own an SVG refraction layer. */
+.glass-surface > [data-liquid-glass-layer] {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  border-radius: inherit;
+  opacity: 0.32;
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Upstream renders sibling pill highlights with a fixed center transform.
+   Our responsive panel owns its highlights; only retain the real refraction layer. */
+[data-liquid-glass-layer] > :not(.lunar-liquid-effect) {
+  display: none;
+}
+[data-liquid-glass-layer] > .lunar-liquid-effect {
+  transform: none !important;
+  transition: none !important;
+  pointer-events: none;
+}
+.lunar-liquid-effect > .glass {
+  width: 100%;
+  height: 100%;
+  box-shadow: none !important;
+  transition: none !important;
+}
+:where(.glass-surface > :not([data-liquid-glass-layer])) {
+  position: relative;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce), (prefers-reduced-transparency: reduce), (forced-colors: active) {
+  .glass-surface > [data-liquid-glass-layer] {
+    display: none;
+  }
+}

@@ -46,6 +46,7 @@ export interface PackagePayload {
   code: string
   description?: string
   accessType: number
+  vendorId?: string | null
   trafficQuota?: number
   bandwidthLimit?: number
   domainLimit?: number

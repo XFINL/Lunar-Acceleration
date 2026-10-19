@@ -274,31 +274,31 @@ export class UserService {
     amount: number,
     remark?: string,
   ) {
-    const user = await this.requireUser(id)
-    const balanceAfter = Number(user.balance) + amount
-    if (balanceAfter < 0) {
-      throw new BusinessException(ErrorCode.PARAM_INVALID, '余额不足，无法扣减')
-    }
-
-    await this.prisma.$transaction([
-      this.prisma.user.update({
-        where: { id: user.id },
-        data: { balance: new Prisma.Decimal(balanceAfter.toFixed(2)) },
-      }),
-      this.prisma.userBalance.create({
-        data: {
-          userId: user.id,
-          type: 4,
-          amount: new Prisma.Decimal(amount.toFixed(2)),
-          balanceAfter: new Prisma.Decimal(balanceAfter.toFixed(2)),
-          refType: 'admin_adjust',
-          remark,
-          operatorId: BigInt(operatorId),
-        },
-      }),
-    ])
-
-    return { id, balance: balanceAfter.toFixed(2) }
+    if (!Number.isFinite(amount)) throw new BusinessException(ErrorCode.PARAM_INVALID, '调整金额无效')
+    const delta = new Prisma.Decimal(amount.toString()).toDecimalPlaces(2)
+    const userId = BigInt(id)
+    const result = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRaw(Prisma.sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`)
+      const user = await tx.user.findFirst({ where: { id: userId, deletedAt: null } })
+      if (!user) throw new BusinessException(ErrorCode.USER_NOT_FOUND)
+      const balanceAfter = user.balance.add(delta).toDecimalPlaces(2)
+      if (balanceAfter.lt(0)) throw new BusinessException(ErrorCode.PARAM_INVALID, '余额不足，无法扣减')
+      await tx.user.update({ where: { id: user.id }, data: { balance: balanceAfter } })
+      await tx.userBalance.create({ data: {
+        userId: user.id, type: 4, amount: delta, balanceAfter,
+        refType: 'admin_adjust', remark, operatorId: BigInt(operatorId),
+      } })
+      await tx.transaction.create({ data: {
+        userId: user.id,
+        type: delta.gte(0) ? 1 : 2,
+        amount: delta.abs(),
+        balanceAfter,
+        refType: 'admin_adjust',
+        remark,
+      } })
+      return balanceAfter
+    })
+    return { id, balance: result.toFixed(2) }
   }
 
   async adminDeleteUser(id: string) {

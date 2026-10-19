@@ -1,0 +1,13 @@
+const test=require('node:test')
+const assert=require('node:assert/strict')
+const {BadRequestException}=require('@nestjs/common')
+const {AllExceptionsFilter}=require('../dist/common/filters/all-exceptions.filter')
+const {ActionableBadRequestException}=require('../dist/common/exceptions/actionable.exception')
+test('only explicitly safe actionable errors preserve their reason; ordinary exceptions stay redacted',()=>{
+  const filter=new AllExceptionsFilter({translateError:code=>`localized:${code}`})
+  const plain=filter.resolve(new BadRequestException('private key or raw provider error'),'en')
+  assert.ok(!JSON.stringify(plain).includes('private key'))
+  const safe=filter.resolve(new ActionableBadRequestException('ACME is not configured; no CA was contacted.'),'en')
+  assert.equal(safe.status,400)
+  assert.equal(safe.body.message,'ACME is not configured; no CA was contacted.')
+})

@@ -26,7 +26,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -39,6 +39,7 @@ import { Tabs } from '@/components/ui/tabs'
 import { EmptyState } from '@/components/common/EmptyState'
 import { Loading } from '@/components/common/Loading'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ConfirmAction } from '@/components/common/ConfirmAction'
 import { Pagination } from '@/components/common/Pagination'
 
 const PAGE_SIZE = 10
@@ -134,7 +135,7 @@ export function AdminOrdersPage() {
                 <TableCell className="font-mono text-xs">{order.orderNo}</TableCell>
                 <TableCell>{order.username}</TableCell>
                 <TableCell>{order.packageName ?? '-'}</TableCell>
-                <TableCell>¥ {order.finalAmount}</TableCell>
+                <TableCell className="numeric whitespace-nowrap">¥ {order.finalAmount}</TableCell>
                 <TableCell>
                   <Badge variant={STATUS_VARIANT[order.status] ?? 'secondary'}>
                     {ORDER_STATUS_MAP[order.status as OrderStatus] ?? '-'}
@@ -144,7 +145,7 @@ export function AdminOrdersPage() {
                   {new Date(order.createdAt).toLocaleString()}
                 </TableCell>
                 <TableCell>
-                  <div className="flex items-center justify-end gap-1">
+                  <div className="data-actions">
                     <Button
                       variant="ghost"
                       size="icon"
@@ -154,19 +155,21 @@ export function AdminOrdersPage() {
                       <Eye className="h-3.5 w-3.5" />
                     </Button>
                     {order.status === OrderStatus.PAID ? (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="text-destructive"
-                        onClick={() => {
-                          if (window.confirm(t('admin.refundConfirm'))) {
-                            refundMutation.mutate(order.id)
-                          }
-                        }}
+                      <ConfirmAction
+                        title={t('admin.refund')}
+                        description={t('admin.refundConfirm')}
+                        onConfirm={() => refundMutation.mutate(order.id)}
                       >
-                        <RotateCcw className="h-3.5 w-3.5" />
-                        {t('admin.refund')}
-                      </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive"
+                          disabled={refundMutation.isPending}
+                        >
+                          <RotateCcw className="h-3.5 w-3.5" />
+                          {t('admin.refund')}
+                        </Button>
+                      </ConfirmAction>
                     ) : null}
                   </div>
                 </TableCell>
@@ -215,8 +218,8 @@ export function AdminOrdersPage() {
                     {TRANSACTION_TYPE_MAP[tx.type as TransactionType] ?? '-'}
                   </Badge>
                 </TableCell>
-                <TableCell>¥ {tx.amount}</TableCell>
-                <TableCell>¥ {tx.balanceAfter}</TableCell>
+                <TableCell className="numeric whitespace-nowrap">¥ {tx.amount}</TableCell>
+                <TableCell className="numeric whitespace-nowrap">¥ {tx.balanceAfter}</TableCell>
                 <TableCell className="text-xs text-muted-foreground">
                   {tx.remark ?? (tx.refType ? `${tx.refType}#${tx.refId ?? '-'}` : '-')}
                 </TableCell>
@@ -237,11 +240,10 @@ export function AdminOrdersPage() {
   }
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader title={t('admin.orders')} description={t('admin.ordersDesc')} />
 
       <Tabs
-        className="mb-4"
         value={tab}
         onValueChange={setTab}
         items={[
@@ -251,11 +253,12 @@ export function AdminOrdersPage() {
       />
 
       {tab === 'orders' ? (
-        <>
-          <Card className="mb-4">
-            <CardContent className="flex flex-wrap items-end gap-3 p-4">
-              <div className="flex min-w-[12rem] flex-1 items-center gap-2">
+        <div className="page-stack">
+          <Card>
+            <CardContent className="filter-toolbar p-4 md:p-6">
+              <div className="control-row min-w-[12rem] flex-1">
                 <Input
+                  aria-label={t('common.keyword')}
                   placeholder={t('common.keyword')}
                   value={keyword}
                   onChange={(event) => setKeyword(event.target.value)}
@@ -268,6 +271,7 @@ export function AdminOrdersPage() {
                 />
                 <Button
                   variant="outline"
+                  aria-label={t('common.search')}
                   onClick={() => {
                     setPage(1)
                     setAppliedKeyword(keyword)
@@ -276,23 +280,19 @@ export function AdminOrdersPage() {
                   <Search className="h-4 w-4" />
                 </Button>
               </div>
-              <Select
-                className="w-[10rem]"
-                value={statusFilter}
-                onChange={(event) => {
+              <SelectRoot value={statusFilter || "__radix_select_empty__"} onValueChange={(event) => {
                   setPage(1)
-                  setStatusFilter(event.target.value)
-                }}
-              >
-                <option value="">
+                  setStatusFilter(event === "__radix_select_empty__" ? '' : event)
+                }}><SelectTrigger id="adminorderspage-select-1" className="w-[10rem]" aria-label={t('orders.status')}><SelectValue /></SelectTrigger><SelectContent>
+                <SelectItem value="__radix_select_empty__">
                   {t('orders.status')}: {t('common.all')}
-                </option>
+                </SelectItem>
                 {STATUS_OPTIONS.map((status) => (
-                  <option key={status} value={status}>
+                  <SelectItem key={status} value={String(status)}>
                     {ORDER_STATUS_MAP[status]}
-                  </option>
+                  </SelectItem>
                 ))}
-              </Select>
+              </SelectContent></SelectRoot>
               <Button
                 variant="ghost"
                 onClick={() => {
@@ -309,7 +309,7 @@ export function AdminOrdersPage() {
           <Card>
             <CardContent className="p-0">{renderOrders()}</CardContent>
           </Card>
-        </>
+        </div>
       ) : (
         <Card>
           <CardContent className="p-0">{renderTransactions()}</CardContent>
@@ -364,8 +364,8 @@ export function AdminOrdersPage() {
                 </p>
               </div>
 
-              <div>
-                <p className="mb-2 text-sm font-medium">{t('orders.items')}</p>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('orders.items')}</p>
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -388,8 +388,8 @@ export function AdminOrdersPage() {
                 </Table>
               </div>
 
-              <div>
-                <p className="mb-2 text-sm font-medium">{t('orders.payments')}</p>
+              <div className="space-y-2">
+                <p className="text-sm font-medium">{t('orders.payments')}</p>
                 {detail.payments.length === 0 ? (
                   <p className="text-sm text-muted-foreground">{t('common.noData')}</p>
                 ) : (
@@ -427,7 +427,7 @@ export function AdminOrdersPage() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setDetailId(null)}>
               {t('common.close')}
             </Button>

@@ -1,0 +1,5 @@
+# shadcn/ui 组件来源与维护说明
+
+- **官方基线：**本次核对了官方 New York / Tailwind v3 registry，组件名、来源及原始代码可从 `https://ui.shadcn.com/r/styles/new-york/{button,card,input,textarea,label,checkbox,switch,select,dialog,alert-dialog,dropdown-menu,tabs,scroll-area,avatar,badge,separator,skeleton}.json` 查看；作者元数据为 `shadcn (https://ui.shadcn.com)`。本目录是基于这些源码调整后的项目版本，**不是未修改的官方原版**。
+- **CLI 对照：**在仓库根目录运行 `cd apps/web && pnpm dlx shadcn@latest add button card input textarea label checkbox switch select dialog alert-dialog dropdown-menu tabs scroll-area avatar badge separator skeleton`；更新前先核对本地 API 与表面样式，勿直接覆盖业务兼容层。单项基线示例：`curl -fsSL https://ui.shadcn.com/r/styles/new-york/button.json`。
+- **兼容范围：**保留 React 19 与 Tailwind 3.4，不迁移 Tailwind v4 语法；[官方 v4 说明](https://ui.shadcn.com/docs/tailwind-v4)指出现有 v3 项目可继续使用 v3。`components.json` 使用现有 CSS、Tailwind 配置及 `@/*` 别名。项目适配包括 `frosted-*` 类、`--control-height` / `--panel-padding`、`SelectRoot`、条目式 `Tabs`（另有 `TabsRoot` 组合 API）、ScrollArea viewport 参数、Dialog 焦点恢复与无描述时的 aria 处理，以及 Avatar `name/src` 兼容。菜单以外的组件不使用液态玻璃层。

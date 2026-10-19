@@ -6,9 +6,11 @@ import { toast } from 'sonner'
 import { ApiError } from '@/api/client'
 import { authApi } from '@/api/auth'
 import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteConfig } from '@/components/common/SiteConfigProvider'
 
 interface LocationState {
   from?: string
@@ -19,6 +21,7 @@ export function LoginPage() {
   const navigate = useNavigate()
   const location = useLocation()
   const setSession = useAuthStore((state) => state.setSession)
+  const siteConfig = useSiteConfig()
 
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -69,13 +72,13 @@ export function LoginPage() {
   }
 
   return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
+    <form className="page-stack" onSubmit={handleSubmit}>
       <div className="space-y-1.5">
         <h2 className="text-lg font-semibold">{t('auth.loginTitle')}</h2>
         <p className="text-sm text-muted-foreground">{t('auth.loginSubtitle')}</p>
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="username">{t('auth.username')}</Label>
         <Input
           id="username"
@@ -86,7 +89,7 @@ export function LoginPage() {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="password">{t('auth.password')}</Label>
         <Input
           id="password"
@@ -98,9 +101,9 @@ export function LoginPage() {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="captcha">{t('auth.captcha')}</Label>
-        <div className="flex items-center gap-2">
+        <div className="control-row">
           <Input
             id="captcha"
             value={captcha}
@@ -110,11 +113,12 @@ export function LoginPage() {
           <button
             type="button"
             onClick={() => void loadCaptcha()}
-            className="flex h-9 w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted"
+            className="frosted-control flex h-9 w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-xl"
+            aria-label={t('common.refresh')}
             title={t('common.refresh')}
           >
             {captchaImage ? (
-              <img src={captchaImage} alt="captcha" className="h-full w-full object-contain" />
+              <img src={captchaImage} alt="captcha" className="h-full w-full object-contain grayscale" />
             ) : (
               <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
@@ -122,26 +126,27 @@ export function LoginPage() {
         </div>
       </div>
 
-      <label className="flex items-center gap-2 text-sm text-muted-foreground">
-        <input
-          type="checkbox"
+      <div className="control-row text-sm text-muted-foreground">
+        <Checkbox
+          id="remember"
           checked={remember}
-          onChange={(event) => setRemember(event.target.checked)}
-          className="h-4 w-4 rounded border-input"
+          onCheckedChange={(checked) => setRemember(checked === true)}
         />
-        {t('auth.remember')}
-      </label>
+        <Label htmlFor="remember" className="cursor-pointer text-muted-foreground">
+          {t('auth.remember')}
+        </Label>
+      </div>
 
       <Button type="submit" className="w-full" disabled={submitting}>
         {submitting ? t('common.loading') : t('auth.login')}
       </Button>
 
-      <p className="text-center text-sm text-muted-foreground">
+      {siteConfig.register.open !== false ? <p className="text-center text-sm text-muted-foreground">
         {t('auth.noAccount')}{' '}
-        <Link to="/register" className="font-medium text-primary hover:underline">
+        <Link to="/register" className="font-medium text-foreground hover:underline">
           {t('auth.goRegister')}
         </Link>
-      </p>
+      </p> : null}
     </form>
   )
 }

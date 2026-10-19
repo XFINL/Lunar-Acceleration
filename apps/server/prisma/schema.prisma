@@ -48,6 +48,8 @@ model User {
   orders       Order[]
   payments     Payment[]
   transactions Transaction[]
+  domains      Domain[]
+  certificates Certificate[]
 
   @@index([status])
   @@index([packageId])
@@ -227,6 +229,11 @@ model UserPackage {
   /// 已用请求数
   requestUsed    BigInt    @default(0) @map("request_used")
   trafficResetAt DateTime? @map("traffic_reset_at") @db.DateTime
+  /// Accrued allowance frozen at grant time; no longer follows mutable package values.
+  trafficQuota   BigInt    @default(0) @map("traffic_quota")
+  requestQuota   BigInt    @default(0) @map("request_quota")
+  /// Latest paid order affecting this entitlement (used to safely unwind refunds).
+  orderId        BigInt?   @unique @map("order_id") @db.UnsignedBigInt
   /// 1生效 2过期 3取消
   status         Int       @default(1) @db.TinyInt
   createdAt      DateTime  @default(now()) @map("created_at") @db.DateTime
@@ -251,6 +258,8 @@ model Order {
   discount    Decimal   @default(0.00) @db.Decimal(12, 2)
   /// 实付
   finalAmount Decimal   @map("final_amount") @db.Decimal(12, 2)
+  /// Immutable package terms and exact entitlement rollback data captured at order creation/payment.
+  packageSnapshot Json?  @map("package_snapshot")
   /// 1待支付 2已支付 3已取消 4已退款
   status      Int       @default(1) @db.TinyInt
   payChannel  String?   @map("pay_channel") @db.VarChar(32)
@@ -405,4 +414,268 @@ model AuditLog {
   @@index([module])
   @@index([createdAt])
   @@map("audit_logs")
+}
+
+
+// ============================================================
+// M3 域名、配置、缓存规则、源站与证书模型
+// ============================================================
+
+model Domain {
+  id           BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  userId       BigInt    @map("user_id") @db.UnsignedBigInt
+  domain       String    @unique @db.VarChar(253)
+  cname        String    @db.VarChar(253)
+  /// 1自建节点 2第三方厂商 3混合（从有效套餐继承）
+  accessType   Int       @map("access_type") @db.TinyInt
+  /// 1待审核 2部署中 3启用 4停用 5审核拒绝 6软删除
+  status       Int       @default(1) @db.TinyInt
+  /// 1待审核 2通过 3拒绝
+  auditStatus  Int       @default(1) @map("audit_status") @db.TinyInt
+  auditRemark  String?   @map("audit_remark") @db.VarChar(255)
+  businessType String    @default("static") @map("business_type") @db.VarChar(32)
+  tags         Json?
+  remark       String?   @db.VarChar(255)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.DateTime
+  updatedAt    DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  deletedAt    DateTime? @map("deleted_at") @db.DateTime
+
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  config       DomainConfig?
+  cacheRules   CacheRule[]
+  originGroups OriginGroup[]
+  vendorResources VendorResource[]
+  vendorWriteJobs VendorWriteJob[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([auditStatus])
+  @@index([createdAt])
+  @@map("domains")
+}
+
+model DomainConfig {
+  domainId      BigInt   @id @map("domain_id") @db.UnsignedBigInt
+  defaultTtl    Int      @default(3600) @map("default_ttl")
+  originProtocol String  @default("http") @map("origin_protocol") @db.VarChar(16)
+  originHost    String?  @map("origin_host") @db.VarChar(253)
+  httpsEnabled  Boolean  @default(false) @map("https_enabled")
+  certId        BigInt?  @map("cert_id") @db.UnsignedBigInt
+  forceHttps    Boolean  @default(false) @map("force_https")
+  hstsEnabled   Boolean  @default(false) @map("hsts_enabled")
+  hstsMaxAge    Int      @default(31536000) @map("hsts_max_age")
+  tlsVersion    String   @default("TLSv1.2") @map("tls_version") @db.VarChar(16)
+  updatedAt     DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+
+  domain      Domain       @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  certificate Certificate? @relation(fields: [certId], references: [id], onDelete: SetNull)
+
+  @@index([certId])
+  @@map("domain_configs")
+}
+
+model CacheRule {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  domainId      BigInt   @map("domain_id") @db.UnsignedBigInt
+  name          String   @db.VarChar(64)
+  priority      Int      @default(0)
+  matchType     String   @default("path") @map("match_type") @db.VarChar(32)
+  matchValue    String   @map("match_value") @db.VarChar(1024)
+  matchMode     String   @default("exact") @map("match_mode") @db.VarChar(32)
+  action        String   @default("cache") @db.VarChar(32)
+  ttl           Int      @default(3600)
+  ignoreParams  Boolean  @default(true) @map("ignore_params")
+  cacheKey      String?  @map("cache_key") @db.VarChar(512)
+  status        Int      @default(1) @db.TinyInt
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
+
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@index([domainId, priority])
+  @@map("cache_rules")
+}
+
+model OriginGroup {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  domainId    BigInt   @map("domain_id") @db.UnsignedBigInt
+  name        String   @db.VarChar(64)
+  lbPolicy    String   @default("round_robin") @map("lb_policy") @db.VarChar(32)
+  healthCheck Json?    @map("health_check")
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
+
+  domain  Domain   @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  origins Origin[]
+
+  @@index([domainId])
+  @@map("origin_groups")
+}
+
+model Origin {
+  id            BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  originGroupId BigInt   @map("origin_group_id") @db.UnsignedBigInt
+  address       String   @db.VarChar(253)
+  port          Int      @default(80)
+  weight        Int      @default(1)
+  isBackup      Boolean  @default(false) @map("is_backup")
+  protocol      String   @default("http") @db.VarChar(16)
+  host          String?  @db.VarChar(253)
+  status        Int      @default(1) @db.TinyInt
+  createdAt     DateTime @default(now()) @map("created_at") @db.DateTime
+
+  group OriginGroup @relation(fields: [originGroupId], references: [id], onDelete: Cascade)
+
+  @@index([originGroupId])
+  @@map("origins")
+}
+
+model Certificate {
+  id         BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  userId     BigInt   @map("user_id") @db.UnsignedBigInt
+  name       String   @db.VarChar(128)
+  certType   String   @default("manual") @map("cert_type") @db.VarChar(32)
+  certPem    String   @map("cert_pem") @db.Text
+  /// Private key must only be persisted encrypted by application code.
+  keyPem     String   @map("key_pem") @db.Text
+  issuer     String   @db.VarChar(512)
+  notBefore  DateTime @map("not_before") @db.DateTime
+  notAfter   DateTime @map("not_after") @db.DateTime
+  autoRenew  Boolean  @default(false) @map("auto_renew")
+  chainPem String? @map("chain_pem") @db.Text
+  acmeDomains Json? @map("acme_domains")
+  acmeDirectory String? @map("acme_directory") @db.VarChar(255)
+  lastRenewedAt DateTime? @map("last_renewed_at") @db.DateTime
+  renewalError String? @map("renewal_error") @db.VarChar(512)
+  status     Int      @default(1) @db.TinyInt
+  createdAt  DateTime @default(now()) @map("created_at") @db.DateTime
+
+  user    User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  configs DomainConfig[]
+
+  @@index([userId])
+  @@index([status])
+  @@map("certificates")
+}
+
+// ACME state survives restarts. No unencrypted private material may be persisted.
+model CertificateJob {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  userId BigInt @map("user_id") @db.UnsignedBigInt
+  domainId BigInt? @map("domain_id") @db.UnsignedBigInt
+  certificateId BigInt? @map("certificate_id") @db.UnsignedBigInt
+  status String @default("pending") @db.VarChar(32)
+  domains Json
+  challenge Json?
+  orderData Json? @map("order_data")
+  privateKey String? @map("private_key") @db.Text
+  csr String? @db.Text
+  error String? @db.VarChar(512)
+  expiresAt DateTime? @map("expires_at") @db.DateTime
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  @@index([userId,status])
+  @@index([certificateId])
+  @@index([expiresAt])
+  @@map("certificate_jobs")
+}
+
+// M4 第一批：厂商凭据管理与只读资源观察，不代表云端部署。
+model Vendor {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String   @db.VarChar(64)
+  code        String   @unique @db.VarChar(32)
+  driver      String   @db.VarChar(64)
+  logo        String?  @db.VarChar(255)
+  description String?  @db.VarChar(512)
+  status      Int      @default(1) @db.TinyInt
+  sort        Int      @default(0)
+  createdAt   DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  accounts    VendorAccount[]
+
+  @@map("vendors")
+}
+
+model VendorAccount {
+  id                 BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  vendorId           BigInt    @map("vendor_id") @db.UnsignedBigInt
+  name               String    @db.VarChar(64)
+  accessKey          String    @map("access_key") @db.Text
+  secretKey          String    @map("secret_key") @db.Text
+  config             Json?
+  status             Int       @default(1) @db.TinyInt
+  lastSyncAt         DateTime? @map("last_sync_at") @db.DateTime
+  credentialVersion  Int       @default(1) @map("credential_version")
+  operationToken     String?   @map("operation_token") @db.VarChar(36)
+  operationExpiresAt DateTime? @map("operation_expires_at") @db.DateTime
+  createdAt          DateTime  @default(now()) @map("created_at") @db.DateTime
+  updatedAt          DateTime  @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  vendor             Vendor    @relation(fields: [vendorId], references: [id], onDelete: Restrict)
+  resources          VendorResource[]
+  logs               VendorSyncLog[]
+  writeJobs          VendorWriteJob[]
+
+  @@unique([vendorId, name])
+  @@index([vendorId])
+  @@map("vendor_accounts")
+}
+
+model VendorResource {
+  id              BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  vendorAccountId BigInt    @map("vendor_account_id") @db.UnsignedBigInt
+  domainId        BigInt    @map("domain_id") @db.UnsignedBigInt
+  vendorDomainId  String?   @map("vendor_domain_id") @db.VarChar(128)
+  vendorCertId    String?   @map("vendor_cert_id") @db.VarChar(128)
+  managedByPanel  Boolean   @default(false) @map("managed_by_panel")
+  resourceData    Json?     @map("resource_data")
+  syncedAt        DateTime? @map("synced_at") @db.DateTime
+  account         VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Cascade)
+  domain          Domain        @relation(fields: [domainId], references: [id], onDelete: Cascade)
+
+  @@unique([vendorAccountId, domainId])
+  @@index([domainId])
+  @@index([vendorAccountId])
+  @@map("vendor_resources")
+}
+
+model VendorSyncLog {
+  id              BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  vendorAccountId BigInt   @map("vendor_account_id") @db.UnsignedBigInt
+  action          String   @db.VarChar(64)
+  /// 1成功，2失败；仅记录脱敏说明。
+  status          Int      @db.TinyInt
+  message         String?  @db.Text
+  createdAt       DateTime @default(now()) @map("created_at") @db.DateTime
+  account         VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Cascade)
+
+  @@index([vendorAccountId])
+  @@map("vendor_sync_logs")
+}
+
+/// Durable, opt-in cloud registration/deletion queue; never contains credentials.
+model VendorWriteJob {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  vendorAccountId BigInt @map("vendor_account_id") @db.UnsignedBigInt
+  domainId BigInt @map("domain_id") @db.UnsignedBigInt
+  requestedBy BigInt @map("requested_by") @db.UnsignedBigInt
+  action String @db.VarChar(16)
+  status String @default("queued") @db.VarChar(24)
+  idempotencyKey String @unique @map("idempotency_key") @db.VarChar(64)
+  activeKey String? @unique @map("active_key") @db.VarChar(64)
+  credentialVersion Int @map("credential_version")
+  originSnapshot Json? @map("origin_snapshot")
+  externalId String? @map("external_id") @db.VarChar(128)
+  attempts Int @default(0)
+  nextAttemptAt DateTime @default(now()) @map("next_attempt_at") @db.DateTime
+  leaseToken String? @map("lease_token") @db.VarChar(36)
+  leaseExpiresAt DateTime? @map("lease_expires_at") @db.DateTime
+  errorCode String? @map("error_code") @db.VarChar(64)
+  message String? @db.VarChar(255)
+  createdAt DateTime @default(now()) @map("created_at") @db.DateTime
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.DateTime
+  account VendorAccount @relation(fields: [vendorAccountId], references: [id], onDelete: Restrict)
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Restrict)
+  @@index([status,nextAttemptAt])
+  @@index([vendorAccountId,createdAt])
+  @@index([domainId])
+  @@map("vendor_write_jobs")
 }

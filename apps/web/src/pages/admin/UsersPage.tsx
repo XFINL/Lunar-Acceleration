@@ -19,8 +19,9 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import {
   Table,
   TableBody,
@@ -32,6 +33,7 @@ import {
 import { EmptyState } from '@/components/common/EmptyState'
 import { Loading } from '@/components/common/Loading'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ConfirmAction } from '@/components/common/ConfirmAction'
 import { Pagination } from '@/components/common/Pagination'
 import { StatusBadge } from '@/components/common/StatusBadge'
 
@@ -217,7 +219,7 @@ export function UsersPage() {
   })
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('admin.users')}
         description={t('admin.usersDesc')}
@@ -229,10 +231,11 @@ export function UsersPage() {
         }
       />
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <div className="flex min-w-[12rem] flex-1 items-center gap-2">
+      <Card>
+        <CardContent className="filter-toolbar p-4 md:p-6">
+          <div className="control-row min-w-[12rem] flex-1">
             <Input
+              aria-label={t('common.keyword')}
               placeholder={t('common.keyword')}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -245,6 +248,7 @@ export function UsersPage() {
             />
             <Button
               variant="outline"
+              aria-label={t('common.search')}
               onClick={() => {
                 setPage(1)
                 setAppliedKeyword(keyword)
@@ -253,32 +257,24 @@ export function UsersPage() {
               <Search className="h-4 w-4" />
             </Button>
           </div>
-          <Select
-            className="w-[9rem]"
-            value={statusFilter}
-            onChange={(event) => {
+          <SelectRoot value={statusFilter || "__radix_select_empty__"} onValueChange={(event) => {
               setPage(1)
-              setStatusFilter(event.target.value)
-            }}
-          >
-            <option value="">{t('common.status')}: {t('common.all')}</option>
-            <option value={String(UserStatus.ACTIVE)}>{t('status.active')}</option>
-            <option value={String(UserStatus.DISABLED)}>{t('status.disabled')}</option>
-            <option value={String(UserStatus.PENDING)}>{t('status.pending')}</option>
-          </Select>
-          <Select
-            className="w-[9rem]"
-            value={roleTypeFilter}
-            onChange={(event) => {
+              setStatusFilter(event === "__radix_select_empty__" ? '' : event)
+            }}><SelectTrigger id="userspage-select-1" className="w-[9rem]" aria-label={t('common.status')}><SelectValue /></SelectTrigger><SelectContent>
+            <SelectItem value="__radix_select_empty__">{t('common.status')}: {t('common.all')}</SelectItem>
+            <SelectItem value={String(UserStatus.ACTIVE)}>{t('status.active')}</SelectItem>
+            <SelectItem value={String(UserStatus.DISABLED)}>{t('status.disabled')}</SelectItem>
+            <SelectItem value={String(UserStatus.PENDING)}>{t('status.pending')}</SelectItem>
+          </SelectContent></SelectRoot>
+          <SelectRoot value={roleTypeFilter || "__radix_select_empty__"} onValueChange={(event) => {
               setPage(1)
-              setRoleTypeFilter(event.target.value)
-            }}
-          >
-            <option value="">{t('admin.roleType')}: {t('common.all')}</option>
-            <option value={String(RoleType.USER)}>{t('roleType.user')}</option>
-            <option value={String(RoleType.ADMIN)}>{t('roleType.admin')}</option>
-            <option value={String(RoleType.SUPER_ADMIN)}>{t('roleType.superAdmin')}</option>
-          </Select>
+              setRoleTypeFilter(event === "__radix_select_empty__" ? '' : event)
+            }}><SelectTrigger id="userspage-select-2" className="w-[9rem]" aria-label={t('admin.roleType')}><SelectValue /></SelectTrigger><SelectContent>
+            <SelectItem value="__radix_select_empty__">{t('admin.roleType')}: {t('common.all')}</SelectItem>
+            <SelectItem value={String(RoleType.USER)}>{t('roleType.user')}</SelectItem>
+            <SelectItem value={String(RoleType.ADMIN)}>{t('roleType.admin')}</SelectItem>
+            <SelectItem value={String(RoleType.SUPER_ADMIN)}>{t('roleType.superAdmin')}</SelectItem>
+          </SelectContent></SelectRoot>
           <Button
             variant="ghost"
             onClick={() => {
@@ -332,12 +328,12 @@ export function UsersPage() {
                       <TableCell>
                         <StatusBadge status={user.status} />
                       </TableCell>
-                      <TableCell className="text-sm">¥ {user.balance}</TableCell>
+                      <TableCell className="numeric whitespace-nowrap">¥ {user.balance}</TableCell>
                       <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
                         {new Date(user.createdAt).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="data-actions">
                           <Button
                             variant="ghost"
                             size="icon"
@@ -397,19 +393,21 @@ export function UsersPage() {
                           >
                             <Ban className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive"
+                          <ConfirmAction
                             title={t('common.delete')}
-                            onClick={() => {
-                              if (window.confirm(t('admin.deleteUserConfirm'))) {
-                                deleteMutation.mutate(user.id)
-                              }
-                            }}
+                            description={t('admin.deleteUserConfirm')}
+                            onConfirm={() => deleteMutation.mutate(user.id)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              title={t('common.delete')}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </ConfirmAction>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -436,18 +434,20 @@ export function UsersPage() {
             <DialogTitle>{t('admin.createUser')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>{t('auth.username')}</Label>
+            <div className="form-field">
+              <Label htmlFor="user-create-username">{t('auth.username')}</Label>
               <Input
+                id="user-create-username"
                 value={createForm.username}
                 onChange={(event) =>
                   setCreateForm({ ...createForm, username: event.target.value })
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('auth.password')}</Label>
+            <div className="form-field">
+              <Label htmlFor="user-create-password">{t('auth.password')}</Label>
               <Input
+                id="user-create-password"
                 type="password"
                 value={createForm.password}
                 onChange={(event) =>
@@ -456,38 +456,37 @@ export function UsersPage() {
               />
               <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
             </div>
-            <div className="space-y-2">
-              <Label>{t('auth.email')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'user-create-email' : 'user-edit-email'}>{t('auth.email')}</Label>
               <Input
+                id={createOpen ? 'user-create-email' : 'user-edit-email'}
                 type="email"
                 value={createForm.email}
                 onChange={(event) => setCreateForm({ ...createForm, email: event.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('user.nickname')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'user-create-nickname' : 'user-edit-nickname'}>{t('user.nickname')}</Label>
               <Input
+                id="user-create-nickname"
                 value={createForm.nickname}
                 onChange={(event) =>
                   setCreateForm({ ...createForm, nickname: event.target.value })
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.roleType')}</Label>
-              <Select
-                value={createForm.roleType}
-                onChange={(event) =>
-                  setCreateForm({ ...createForm, roleType: Number(event.target.value) })
-                }
-              >
-                <option value={RoleType.USER}>{t('roleType.user')}</option>
-                <option value={RoleType.ADMIN}>{t('roleType.admin')}</option>
-                <option value={RoleType.SUPER_ADMIN}>{t('roleType.superAdmin')}</option>
-              </Select>
+            <div className="form-field">
+              <Label htmlFor="userspage-select-3">{t('admin.roleType')}</Label>
+              <SelectRoot value={String(createForm.roleType)} onValueChange={(event) =>
+                  setCreateForm({ ...createForm, roleType: Number(event) })
+                }><SelectTrigger id="userspage-select-3" aria-label={t('admin.roleType')}><SelectValue /></SelectTrigger><SelectContent>
+                <SelectItem value={String(RoleType.USER)}>{t('roleType.user')}</SelectItem>
+                <SelectItem value={String(RoleType.ADMIN)}>{t('roleType.admin')}</SelectItem>
+                <SelectItem value={String(RoleType.SUPER_ADMIN)}>{t('roleType.superAdmin')}</SelectItem>
+              </SelectContent></SelectRoot>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               {t('common.cancel')}
             </Button>
@@ -509,56 +508,53 @@ export function UsersPage() {
             <DialogDescription>{editing?.username}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>{t('user.nickname')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'user-create-nickname' : 'user-edit-nickname'}>{t('user.nickname')}</Label>
               <Input
+                id="user-edit-nickname"
                 value={editForm.nickname}
                 onChange={(event) => setEditForm({ ...editForm, nickname: event.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('auth.email')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'user-create-email' : 'user-edit-email'}>{t('auth.email')}</Label>
               <Input
+                id={createOpen ? 'user-create-email' : 'user-edit-email'}
                 type="email"
                 value={editForm.email}
                 onChange={(event) => setEditForm({ ...editForm, email: event.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.phone')}</Label>
+            <div className="form-field">
+              <Label htmlFor="user-edit-phone">{t('admin.phone')}</Label>
               <Input
+                id="user-edit-phone"
                 value={editForm.phone}
                 onChange={(event) => setEditForm({ ...editForm, phone: event.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('common.status')}</Label>
-              <Select
-                value={editForm.status}
-                onChange={(event) =>
-                  setEditForm({ ...editForm, status: Number(event.target.value) })
-                }
-              >
-                <option value={UserStatus.ACTIVE}>{t('status.active')}</option>
-                <option value={UserStatus.DISABLED}>{t('status.disabled')}</option>
-                <option value={UserStatus.PENDING}>{t('status.pending')}</option>
-              </Select>
+            <div className="form-field">
+              <Label htmlFor="userspage-select-4">{t('common.status')}</Label>
+              <SelectRoot value={String(editForm.status)} onValueChange={(event) =>
+                  setEditForm({ ...editForm, status: Number(event) })
+                }><SelectTrigger id="userspage-select-4" aria-label={t('common.status')}><SelectValue /></SelectTrigger><SelectContent>
+                <SelectItem value={String(UserStatus.ACTIVE)}>{t('status.active')}</SelectItem>
+                <SelectItem value={String(UserStatus.DISABLED)}>{t('status.disabled')}</SelectItem>
+                <SelectItem value={String(UserStatus.PENDING)}>{t('status.pending')}</SelectItem>
+              </SelectContent></SelectRoot>
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.roleType')}</Label>
-              <Select
-                value={editForm.roleType}
-                onChange={(event) =>
-                  setEditForm({ ...editForm, roleType: Number(event.target.value) })
-                }
-              >
-                <option value={RoleType.USER}>{t('roleType.user')}</option>
-                <option value={RoleType.ADMIN}>{t('roleType.admin')}</option>
-                <option value={RoleType.SUPER_ADMIN}>{t('roleType.superAdmin')}</option>
-              </Select>
+            <div className="form-field">
+              <Label htmlFor="userspage-select-5">{t('admin.roleType')}</Label>
+              <SelectRoot value={String(editForm.roleType)} onValueChange={(event) =>
+                  setEditForm({ ...editForm, roleType: Number(event) })
+                }><SelectTrigger id="userspage-select-5" aria-label={t('admin.roleType')}><SelectValue /></SelectTrigger><SelectContent>
+                <SelectItem value={String(RoleType.USER)}>{t('roleType.user')}</SelectItem>
+                <SelectItem value={String(RoleType.ADMIN)}>{t('roleType.admin')}</SelectItem>
+                <SelectItem value={String(RoleType.SUPER_ADMIN)}>{t('roleType.superAdmin')}</SelectItem>
+              </SelectContent></SelectRoot>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setEditing(null)}>
               {t('common.cancel')}
             </Button>
@@ -577,24 +573,26 @@ export function UsersPage() {
             <DialogDescription>{balanceTarget?.username}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>{t('admin.balanceAmount')}</Label>
+            <div className="form-field">
+              <Label htmlFor="user-balance-amount">{t('admin.balanceAmount')}</Label>
               <Input
+                id="user-balance-amount"
                 type="number"
                 step="0.01"
                 value={balanceAmount}
                 onChange={(event) => setBalanceAmount(event.target.value)}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.remark')}</Label>
+            <div className="form-field">
+              <Label htmlFor="user-balance-remark">{t('admin.remark')}</Label>
               <Input
+                id="user-balance-remark"
                 value={balanceRemark}
                 onChange={(event) => setBalanceRemark(event.target.value)}
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setBalanceTarget(null)}>
               {t('common.cancel')}
             </Button>
@@ -617,24 +615,23 @@ export function UsersPage() {
           </DialogHeader>
           <div className="grid grid-cols-2 gap-2">
             {roles?.map((role) => (
-              <label key={role.id} className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
-                  className="h-4 w-4 rounded border-input"
+              <Label key={role.id} htmlFor={`user-role-${role.id}`} className="control-row text-sm">
+                <Checkbox
+                  id={`user-role-${role.id}`}
                   checked={selectedRoles.includes(role.code)}
-                  onChange={(event) => {
+                  onCheckedChange={(checked) => {
                     setSelectedRoles((prev) =>
-                      event.target.checked
+                      checked === true
                         ? [...prev, role.code]
                         : prev.filter((code) => code !== role.code),
                     )
                   }}
                 />
                 {role.name}
-              </label>
+              </Label>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setRolesTarget(null)}>
               {t('common.cancel')}
             </Button>

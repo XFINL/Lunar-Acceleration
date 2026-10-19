@@ -36,6 +36,8 @@ export const ACTIONS = [
   'refund',
   'assign',
   'close',
+  'test',
+  'sync',
 ] as const
 
 export type Resource = (typeof RESOURCES)[number]
@@ -80,6 +82,9 @@ export const PERMISSION_NAME_MAP: Record<string, string> = {
   'vendor:read': '查看厂商',
   'vendor:update': '更新厂商',
   'vendor:delete': '删除厂商',
+  'vendor:test': '测试厂商连接',
+  'vendor:sync': '只读同步厂商清单',
+  'vendor:deploy': '提交厂商云端注册与删除',
   'schedule:create': '创建调度策略',
   'schedule:read': '查看调度策略',
   'schedule:update': '更新调度策略',
@@ -153,6 +158,9 @@ export const PERMISSIONS: PermissionCode[] = [
   'vendor:read',
   'vendor:update',
   'vendor:delete',
+  'vendor:test',
+  'vendor:sync',
+  'vendor:deploy',
   'schedule:create',
   'schedule:read',
   'schedule:update',

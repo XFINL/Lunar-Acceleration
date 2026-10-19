@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Plus, ShieldCheck, Trash2 } from 'lucide-react'
+import { Pencil, ShieldCheck, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { adminApi } from '@/api/admin'
 import type { RoleItem } from '@/api/types'
@@ -18,6 +18,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
+import { Checkbox } from '@/components/ui/checkbox'
 import { Label } from '@/components/ui/label'
 import {
   Table,
@@ -30,6 +31,7 @@ import {
 import { EmptyState } from '@/components/common/EmptyState'
 import { Loading } from '@/components/common/Loading'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ConfirmAction } from '@/components/common/ConfirmAction'
 
 interface RoleForm {
   name: string
@@ -136,13 +138,13 @@ export function RolesPage() {
   }
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('admin.roles')}
         description={t('admin.rolesDesc')}
         actions={
           <Button onClick={() => setCreateOpen(true)}>
-            <Plus className="h-4 w-4" />
+
             {t('admin.createRole')}
           </Button>
         }
@@ -183,37 +185,32 @@ export function RolesPage() {
                     <TableCell>{role.permissionCount}</TableCell>
                     <TableCell>{role.userCount}</TableCell>
                     <TableCell>
-                      <div className="flex items-center justify-end gap-1">
+                      <div className="data-actions">
                         <Button
                           variant="ghost"
                           size="icon"
                           title={t('admin.assignPermissions')}
                           onClick={() => void openPerms(role)}
-                        >
-                          <ShieldCheck className="h-3.5 w-3.5" />
+                        ><ShieldCheck className="h-4 w-4" />
+
                         </Button>
                         <Button
                           variant="ghost"
                           size="icon"
                           title={t('common.edit')}
                           onClick={() => setEditing({ ...role })}
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
+                        ><Pencil className="h-4 w-4" />
+
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-destructive"
-                          disabled={role.isSystem === 1}
-                          title={t('common.delete')}
-                          onClick={() => {
-                            if (window.confirm(t('admin.deleteRoleConfirm'))) {
-                              deleteMutation.mutate(role.id)
-                            }
-                          }}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                        <ConfirmAction title={t('common.delete')} description={t('admin.deleteRoleConfirm')} onConfirm={() => deleteMutation.mutate(role.id)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive"
+                            disabled={role.isSystem === 1 || deleteMutation.isPending}
+                            title={t('common.delete')}
+                          ><Trash2 className="h-4 w-4" /></Button>
+                        </ConfirmAction>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -231,30 +228,33 @@ export function RolesPage() {
             <DialogTitle>{t('admin.createRole')}</DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>{t('admin.roleName')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'role-create-name' : 'role-edit-name'}>{t('admin.roleName')}</Label>
               <Input
+                id="role-create-name"
                 value={form.name}
                 onChange={(event) => setForm({ ...form, name: event.target.value })}
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.roleCode')}</Label>
+            <div className="form-field">
+              <Label htmlFor="role-create-code">{t('admin.roleCode')}</Label>
               <Input
+                id="role-create-code"
                 value={form.code}
                 onChange={(event) => setForm({ ...form, code: event.target.value })}
                 placeholder="custom_role"
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.description')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'role-create-description' : 'role-edit-description'}>{t('admin.description')}</Label>
               <Input
+                id="role-create-description"
                 value={form.description}
                 onChange={(event) => setForm({ ...form, description: event.target.value })}
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setCreateOpen(false)}>
               {t('common.cancel')}
             </Button>
@@ -276,18 +276,20 @@ export function RolesPage() {
             <DialogDescription className="font-mono">{editing?.code}</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="space-y-2">
-              <Label>{t('admin.roleName')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'role-create-name' : 'role-edit-name'}>{t('admin.roleName')}</Label>
               <Input
+                id="role-edit-name"
                 value={editing?.name ?? ''}
                 onChange={(event) =>
                   setEditing((prev) => (prev ? { ...prev, name: event.target.value } : prev))
                 }
               />
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.description')}</Label>
+            <div className="form-field">
+              <Label htmlFor={createOpen ? 'role-create-description' : 'role-edit-description'}>{t('admin.description')}</Label>
               <Input
+                id="role-edit-description"
                 value={editing?.description ?? ''}
                 onChange={(event) =>
                   setEditing((prev) => (prev ? { ...prev, description: event.target.value } : prev))
@@ -295,7 +297,7 @@ export function RolesPage() {
               />
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setEditing(null)}>
               {t('common.cancel')}
             </Button>
@@ -313,7 +315,7 @@ export function RolesPage() {
             <DialogTitle>{t('admin.assignPermissions')}</DialogTitle>
             <DialogDescription>{permsTarget?.name}</DialogDescription>
           </DialogHeader>
-          <div className="mb-2 flex items-center gap-2">
+          <div className="control-row flex-wrap">
             <Button
               variant="outline"
               size="sm"
@@ -333,14 +335,13 @@ export function RolesPage() {
                 </p>
                 <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                   {items.map((item) => (
-                    <label key={item.code} className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        className="h-4 w-4 rounded border-input"
+                    <Label key={item.code} htmlFor={`permission-${item.code}`} className="control-row text-sm">
+                      <Checkbox
+                        id={`permission-${item.code}`}
                         checked={selectedPerms.includes(item.code)}
-                        onChange={(event) => {
+                        onCheckedChange={(checked) => {
                           setSelectedPerms((prev) =>
-                            event.target.checked
+                            checked === true
                               ? [...prev, item.code]
                               : prev.filter((code) => code !== item.code),
                           )
@@ -349,13 +350,13 @@ export function RolesPage() {
                       <span className="truncate" title={item.code}>
                         {item.name}
                       </span>
-                    </label>
+                    </Label>
                   ))}
                 </div>
               </div>
             ))}
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button variant="outline" onClick={() => setPermsTarget(null)}>
               {t('common.cancel')}
             </Button>

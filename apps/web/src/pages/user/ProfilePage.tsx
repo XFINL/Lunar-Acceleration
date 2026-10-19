@@ -54,10 +54,10 @@ export function ProfilePage() {
   })
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader title={t('user.profile')} description={t('user.profileDesc')} />
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="form-grid lg:grid-cols-2">
         <Card>
           <CardHeader>
             <CardTitle>{t('user.profile')}</CardTitle>
@@ -70,11 +70,11 @@ export function ProfilePage() {
                 profileMutation.mutate()
               }}
             >
-              <div className="space-y-2">
+              <div className="form-field">
                 <Label>{t('auth.username')}</Label>
                 <Input value={user?.username ?? ''} disabled />
               </div>
-              <div className="space-y-2">
+              <div className="form-field">
                 <Label htmlFor="nickname">{t('user.nickname')}</Label>
                 <Input
                   id="nickname"
@@ -82,7 +82,7 @@ export function ProfilePage() {
                   onChange={(event) => setNickname(event.target.value)}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="form-field">
                 <Label htmlFor="email">{t('auth.email')}</Label>
                 <Input
                   id="email"
@@ -91,7 +91,7 @@ export function ProfilePage() {
                   onChange={(event) => setEmail(event.target.value)}
                 />
               </div>
-              <div className="space-y-2">
+              <div className="form-field">
                 <Label htmlFor="avatar">{t('user.avatar')}</Label>
                 <Input
                   id="avatar"
@@ -99,9 +99,9 @@ export function ProfilePage() {
                   onChange={(event) => setAvatar(event.target.value)}
                 />
               </div>
-              <Button type="submit" disabled={profileMutation.isPending}>
+              <div className="form-actions"><Button type="submit" disabled={profileMutation.isPending}>
                 {t('user.saveProfile')}
-              </Button>
+              </Button></div>
             </form>
           </CardContent>
         </Card>
@@ -118,7 +118,7 @@ export function ProfilePage() {
                 passwordMutation.mutate()
               }}
             >
-              <div className="space-y-2">
+              <div className="form-field">
                 <Label htmlFor="oldPassword">{t('user.oldPassword')}</Label>
                 <Input
                   id="oldPassword"
@@ -128,7 +128,7 @@ export function ProfilePage() {
                   required
                 />
               </div>
-              <div className="space-y-2">
+              <div className="form-field">
                 <Label htmlFor="newPassword">{t('user.newPassword')}</Label>
                 <Input
                   id="newPassword"
@@ -139,9 +139,9 @@ export function ProfilePage() {
                 />
                 <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
               </div>
-              <Button type="submit" disabled={passwordMutation.isPending}>
+              <div className="form-actions"><Button type="submit" disabled={passwordMutation.isPending}>
                 {t('user.changePassword')}
-              </Button>
+              </Button></div>
             </form>
           </CardContent>
         </Card>

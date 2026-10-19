@@ -1,7 +1,9 @@
 import { Injectable } from '@nestjs/common'
 import { randomUUID } from 'node:crypto'
 import { mkdir, unlink, writeFile } from 'node:fs/promises'
-import { dirname, extname, join, resolve } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { ErrorCode } from '@lunar/shared'
+import { BusinessException } from '../../../common/exceptions/business.exception'
 
 export interface UploadedFileLike {
   buffer: Buffer
@@ -27,7 +29,13 @@ export class LocalStorageService {
 
   async save(file: UploadedFileLike, type = 'site'): Promise<StoredFile> {
     const safeType = TYPE_PATTERN.test(type) ? type : 'site'
-    const ext = extname(file.originalname).toLowerCase() || '.bin'
+    const extensions: Record<string, string> = {
+      'image/jpeg': '.jpg', 'image/png': '.png', 'image/gif': '.gif', 'image/webp': '.webp',
+      'image/x-icon': '.ico', 'image/vnd.microsoft.icon': '.ico',
+      'application/pdf': '.pdf', 'application/zip': '.zip', 'application/x-zip-compressed': '.zip',
+    }
+    const ext = extensions[file.mimetype]
+    if (!ext) throw new BusinessException(ErrorCode.PARAM_INVALID, '不支持的上传类型')
     const now = new Date()
     const month = String(now.getMonth() + 1).padStart(2, '0')
 

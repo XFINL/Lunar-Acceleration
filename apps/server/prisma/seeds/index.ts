@@ -6,6 +6,7 @@ import { seedPermissions } from './permissions.seed'
 import { seedRoles } from './roles.seed'
 import { seedSiteConfigs } from './site-configs.seed'
 import { seedSystemConfigs } from './system-configs.seed'
+import { seedVendors } from './vendors.seed'
 
 async function main(): Promise<void> {
   const prisma = new PrismaClient()
@@ -17,6 +18,7 @@ async function main(): Promise<void> {
     const packageCount = await seedPackages(prisma)
     const paymentChannelCount = await seedPaymentChannels(prisma)
     const adminUsername = await seedAdminUser(prisma)
+    const vendorCount = await seedVendors(prisma)
 
     console.log('[seed] 权限点:', permissionCount)
     console.log('[seed] 内置角色:', roleCount)
@@ -24,6 +26,7 @@ async function main(): Promise<void> {
     console.log('[seed] 系统配置:', systemConfigCount)
     console.log('[seed] 套餐:', packageCount)
     console.log('[seed] 支付渠道:', paymentChannelCount)
+    console.log('[seed] 厂商:', vendorCount)
     console.log(`[seed] 初始管理员: ${adminUsername}（默认密码见 SEED_ADMIN_PASSWORD）`)
     console.log('[seed] 完成')
   } finally {

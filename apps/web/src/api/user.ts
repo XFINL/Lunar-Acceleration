@@ -1,6 +1,7 @@
 import type { Paginated } from './types'
 import { request } from './client'
 import type { ApiKeyItem, CreatedApiKey, LoginLogItem, UserProfile } from './types'
+import type { AcmeJob } from './certificate'
 
 export const userApi = {
   getProfile: () => request.get<UserProfile>('/user/profile'),
@@ -10,6 +11,8 @@ export const userApi = {
     request.put<{ success: boolean }>('/user/password', data),
   loginLogs: (params: { page?: number; pageSize?: number }) =>
     request.get<Paginated<LoginLogItem>>('/user/login-logs', { params }),
+  listCertificateJobs: (params: { page?: number; pageSize?: number }) =>
+    request.get<Paginated<AcmeJob>>('/user/certificate-jobs', { params }),
   listApiKeys: () => request.get<ApiKeyItem[]>('/user/api-keys'),
   createApiKey: (data: { name: string }) => request.post<CreatedApiKey>('/user/api-keys', data),
   updateApiKey: (id: string, data: { name?: string; status?: number }) =>

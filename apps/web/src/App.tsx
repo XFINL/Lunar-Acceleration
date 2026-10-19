@@ -21,13 +21,15 @@ import { AdminPackagesPage } from '@/pages/admin/AdminPackagesPage'
 import { AdminOrdersPage } from '@/pages/admin/AdminOrdersPage'
 import { SiteConfigPage } from '@/pages/admin/SiteConfigPage'
 import { SystemConfigPage } from '@/pages/admin/SystemConfigPage'
+import { DomainsPage } from '@/pages/user/DomainsPage'
+import { CachePage } from '@/pages/user/CachePage'
+import { OriginsPage } from '@/pages/user/OriginsPage'
+import { CertificatesPage } from '@/pages/user/CertificatesPage'
+import { AdminDomainsPage } from '@/pages/admin/AdminDomainsPage'
+import { VendorsPage } from '@/pages/admin/VendorsPage'
 
 /** 用户端尚未实现的模块（侧边栏标为 comingSoon），统一落到占位页 */
 const USER_COMING_SOON = [
-  'domains',
-  'cache',
-  'origin',
-  'certificates',
   'purge',
   'waf',
   'statistics',
@@ -59,6 +61,10 @@ export default function App() {
           <Route path="account/login-logs" element={<LoginLogsPage />} />
           <Route path="packages" element={<PackagesPage />} />
           <Route path="orders" element={<OrdersPage />} />
+          <Route path="domains" element={<DomainsPage />} />
+          <Route path="cache" element={<CachePage />} />
+          <Route path="origin" element={<OriginsPage />} />
+          <Route path="certificates" element={<CertificatesPage />} />
           {USER_COMING_SOON.map((path) => (
             <Route key={path} path={path} element={<ComingSoonPage />} />
           ))}
@@ -80,6 +86,8 @@ export default function App() {
           <Route path="orders" element={<AdminOrdersPage />} />
           <Route path="site-config" element={<SiteConfigPage />} />
           <Route path="system-config" element={<SystemConfigPage />} />
+          <Route path="domains" element={<AdminDomainsPage />} />
+          <Route path="vendors" element={<VendorsPage />} />
           <Route path="*" element={<ComingSoonPage />} />
         </Route>
 

@@ -10,6 +10,7 @@ import { Prisma } from '@prisma/client'
 import { ErrorCode, type FieldError } from '@lunar/shared'
 import type { Request, Response } from 'express'
 import { BusinessException } from '../exceptions/business.exception'
+import { ActionableBadRequestException } from '../exceptions/actionable.exception'
 import { I18nService } from '../../shared/i18n/i18n.service'
 
 interface ErrorBody {
@@ -48,6 +49,10 @@ export class AllExceptionsFilter implements ExceptionFilter {
   }
 
   private resolve(exception: unknown, locale: ReturnType<I18nService['resolveLocale']>) {
+    // 仅此显式类型允许返回开发者编写的安全说明；其余异常仍按统一文案脱敏。
+    if (exception instanceof ActionableBadRequestException) {
+      return { status: HttpStatus.BAD_REQUEST, body: { code: ErrorCode.PARAM_INVALID, message: exception.safeMessage } as ErrorBody }
+    }
     // 业务异常
     if (exception instanceof BusinessException) {
       return {

@@ -45,10 +45,10 @@ class CreatePackageDto {
   @IsInt()
   accessType!: number
 
-  @ApiPropertyOptional({ description: '厂商 ID' })
+  @ApiPropertyOptional({ description: '厂商 ID；第三方/混合套餐可不配置，传 null 清除' })
   @IsString()
   @IsOptional()
-  vendorId?: string
+  vendorId?: string | null
 
   @ApiPropertyOptional({ description: '流量额度(字节)' })
   @Type(() => Number)
@@ -135,10 +135,10 @@ class UpdatePackageDto {
   @IsOptional()
   accessType?: number
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ description: '厂商 ID；省略时保留原映射，传 null 清除' })
   @IsString()
   @IsOptional()
-  vendorId?: string
+  vendorId?: string | null
 
   @ApiPropertyOptional()
   @Type(() => Number)

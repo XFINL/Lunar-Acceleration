@@ -13,6 +13,7 @@ import {
   PackageStatus,
 } from '@lunar/shared'
 import { adminApi, type PackagePayload } from '@/api/admin'
+import { vendorApi, type Vendor } from '@/api/vendor'
 import type { PackageVo } from '@/api/types'
 import { ApiError } from '@/api/client'
 import { Badge } from '@/components/ui/badge'
@@ -27,7 +28,7 @@ import {
 } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Select } from '@/components/ui/select'
+import { SelectRoot, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 import { Switch } from '@/components/ui/switch'
 import {
   Table,
@@ -40,6 +41,7 @@ import {
 import { EmptyState } from '@/components/common/EmptyState'
 import { Loading } from '@/components/common/Loading'
 import { PageHeader } from '@/components/common/PageHeader'
+import { ConfirmAction } from '@/components/common/ConfirmAction'
 import { Pagination } from '@/components/common/Pagination'
 
 const PAGE_SIZE = 10
@@ -60,6 +62,7 @@ interface PackageForm {
   code: string
   description: string
   accessType: number
+  vendorId: string
   trafficGb: string
   bandwidthLimit: string
   domainLimit: string
@@ -78,6 +81,7 @@ const EMPTY_FORM: PackageForm = {
   code: '',
   description: '',
   accessType: PackageAccessType.SELF_NODE,
+  vendorId: '',
   trafficGb: '',
   bandwidthLimit: '',
   domainLimit: '',
@@ -128,6 +132,7 @@ function buildPayload(form: PackageForm): PackagePayload {
     code: form.code,
     description: form.description || undefined,
     accessType: form.accessType,
+    vendorId: form.accessType === PackageAccessType.SELF_NODE ? null : form.vendorId || null,
     trafficQuota: form.trafficGb ? Math.round(Number(form.trafficGb) * BYTES_PER_GB) : undefined,
     bandwidthLimit: form.bandwidthLimit ? Number(form.bandwidthLimit) : undefined,
     domainLimit: form.domainLimit ? Number(form.domainLimit) : undefined,
@@ -149,6 +154,7 @@ function packageToForm(pkg: PackageVo): PackageForm {
     code: pkg.code,
     description: pkg.description ?? '',
     accessType: pkg.accessType,
+    vendorId: pkg.vendorId ?? '',
     trafficGb: Number.isFinite(gb) && gb > 0 ? String(Number(gb.toFixed(4))) : '',
     bandwidthLimit: String(pkg.bandwidthLimit),
     domainLimit: String(pkg.domainLimit),
@@ -198,6 +204,21 @@ export function AdminPackagesPage() {
         keyword: appliedKeyword || undefined,
         status: statusFilter === '' ? undefined : Number(statusFilter),
       }),
+  })
+
+  const vendorsQuery = useQuery({
+    queryKey: ['admin', 'package-vendors'],
+    queryFn: async () => {
+      const pageSize = 100
+      const first = await vendorApi.listVendors({ page: 1, pageSize })
+      const vendors: Vendor[] = [...first.list]
+      for (let page = 2; vendors.length < first.pagination.total; page += 1) {
+        const next = await vendorApi.listVendors({ page, pageSize })
+        if (next.list.length === 0) break
+        vendors.push(...next.list)
+      }
+      return vendors.filter((vendor) => vendor.status === 1)
+    },
   })
 
   const invalidate = () => void queryClient.invalidateQueries({ queryKey: ['admin', 'packages'] })
@@ -252,7 +273,7 @@ export function AdminPackagesPage() {
   }
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader
         title={t('admin.packages')}
         description={t('admin.packagesDesc')}
@@ -264,10 +285,11 @@ export function AdminPackagesPage() {
         }
       />
 
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <div className="flex min-w-[12rem] flex-1 items-center gap-2">
+      <Card>
+        <CardContent className="filter-toolbar p-4 md:p-6">
+          <div className="control-row min-w-[12rem] flex-1">
             <Input
+              aria-label={t('common.keyword')}
               placeholder={t('common.keyword')}
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
@@ -280,6 +302,7 @@ export function AdminPackagesPage() {
             />
             <Button
               variant="outline"
+              aria-label={t('common.search')}
               onClick={() => {
                 setPage(1)
                 setAppliedKeyword(keyword)
@@ -288,18 +311,14 @@ export function AdminPackagesPage() {
               <Search className="h-4 w-4" />
             </Button>
           </div>
-          <Select
-            className="w-[9rem]"
-            value={statusFilter}
-            onChange={(event) => {
+          <SelectRoot value={statusFilter || "__radix_select_empty__"} onValueChange={(event) => {
               setPage(1)
-              setStatusFilter(event.target.value)
-            }}
-          >
-            <option value="">{t('common.status')}: {t('common.all')}</option>
-            <option value={PackageStatus.ONLINE}>{t('packages.statusOnline')}</option>
-            <option value={PackageStatus.OFFLINE}>{t('packages.statusOffline')}</option>
-          </Select>
+              setStatusFilter(event === "__radix_select_empty__" ? '' : event)
+            }}><SelectTrigger id="adminpackagespage-select-1" className="w-[9rem]" aria-label={t('common.status')}><SelectValue /></SelectTrigger><SelectContent>
+            <SelectItem value="__radix_select_empty__">{t('common.status')}: {t('common.all')}</SelectItem>
+            <SelectItem value={String(PackageStatus.ONLINE)}>{t('packages.statusOnline')}</SelectItem>
+            <SelectItem value={String(PackageStatus.OFFLINE)}>{t('packages.statusOffline')}</SelectItem>
+          </SelectContent></SelectRoot>
           <Button
             variant="ghost"
             onClick={() => {
@@ -350,10 +369,10 @@ export function AdminPackagesPage() {
                           {PACKAGE_ACCESS_TYPE_MAP[pkg.accessType as PackageAccessType] ?? '-'}
                         </Badge>
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell className="numeric whitespace-nowrap">
                         ¥ {pkg.price} / {PACKAGE_PERIOD_MAP[pkg.period as PackagePeriod] ?? '-'}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">{formatBytes(pkg.trafficQuota)}</TableCell>
+                      <TableCell className="numeric whitespace-nowrap">{formatBytes(pkg.trafficQuota)}</TableCell>
                       <TableCell>
                         <Badge variant={pkg.status === PackageStatus.ONLINE ? 'success' : 'secondary'}>
                           {pkg.status === PackageStatus.ONLINE
@@ -361,9 +380,9 @@ export function AdminPackagesPage() {
                             : t('packages.statusOffline')}
                         </Badge>
                       </TableCell>
-                      <TableCell>{pkg.sort}</TableCell>
+                      <TableCell className="numeric">{pkg.sort}</TableCell>
                       <TableCell>
-                        <div className="flex items-center justify-end gap-1">
+                        <div className="data-actions">
                           <Button
                             variant="ghost"
                             size="sm"
@@ -389,19 +408,21 @@ export function AdminPackagesPage() {
                           >
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive"
+                          <ConfirmAction
                             title={t('common.delete')}
-                            onClick={() => {
-                              if (window.confirm(t('admin.deletePackageConfirm'))) {
-                                deleteMutation.mutate(pkg.id)
-                              }
-                            }}
+                            description={t('admin.deletePackageConfirm')}
+                            onConfirm={() => deleteMutation.mutate(pkg.id)}
                           >
-                            <Trash2 className="h-3.5 w-3.5" />
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              title={t('common.delete')}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </ConfirmAction>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -436,145 +457,184 @@ export function AdminPackagesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-3">
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.packageName')}</Label>
+            <div className="form-grid">
+              <div className="form-field">
+                <Label htmlFor="package-name">{t('admin.packageName')}</Label>
                 <Input
+                  id="package-name"
                   value={form.name}
                   onChange={(event) => setForm({ ...form, name: event.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t('admin.packageCode')}</Label>
+              <div className="form-field">
+                <Label htmlFor="package-code">{t('admin.packageCode')}</Label>
                 <Input
+                  id="package-code"
                   value={form.code}
                   onChange={(event) => setForm({ ...form, code: event.target.value })}
                 />
               </div>
             </div>
-            <div className="space-y-2">
-              <Label>{t('admin.description')}</Label>
+            <div className="form-field">
+              <Label htmlFor="package-description">{t('admin.description')}</Label>
               <Input
+                id="package-description"
                 value={form.description}
                 onChange={(event) => setForm({ ...form, description: event.target.value })}
               />
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.accessType')}</Label>
-                <Select
-                  value={form.accessType}
-                  onChange={(event) =>
-                    setForm({ ...form, accessType: Number(event.target.value) })
-                  }
-                >
+            <div className="form-grid">
+              <div className="form-field">
+                <Label htmlFor="adminpackagespage-select-2">{t('admin.accessType')}</Label>
+                <SelectRoot value={String(form.accessType)} onValueChange={(event) =>
+                    setForm({
+                      ...form,
+                      accessType: Number(event),
+                      ...(Number(event) === PackageAccessType.SELF_NODE ? { vendorId: '' } : {}),
+                    })
+                  }><SelectTrigger id="adminpackagespage-select-2" aria-label={t('admin.accessType')}><SelectValue /></SelectTrigger><SelectContent>
                   {ACCESS_TYPES.map((type) => (
-                    <option key={type} value={type}>
+                    <SelectItem key={type} value={String(type)}>
                       {PACKAGE_ACCESS_TYPE_MAP[type]}
-                    </option>
+                    </SelectItem>
                   ))}
-                </Select>
+                </SelectContent></SelectRoot>
               </div>
-              <div className="space-y-2">
-                <Label>{t('admin.period')}</Label>
-                <Select
-                  value={form.period}
-                  onChange={(event) => setForm({ ...form, period: Number(event.target.value) })}
-                >
+              <div className="form-field">
+                <Label htmlFor="package-vendor">{t('admin.vendorMapping')}</Label>
+                {form.accessType === PackageAccessType.SELF_NODE ? (
+                  <p className="text-sm text-muted-foreground">{t('admin.selfHostedPackageNoVendor')}</p>
+                ) : (
+                  <>
+                    <SelectRoot
+                      value={form.vendorId || '__no_vendor_mapping__'}
+                      onValueChange={(value) =>
+                        setForm({ ...form, vendorId: value === '__no_vendor_mapping__' ? '' : value })
+                      }
+                    >
+                      <SelectTrigger id="package-vendor" aria-label={t('admin.vendorMapping')} disabled={vendorsQuery.isLoading}>
+                        <SelectValue placeholder={t('admin.selectEnabledVendor')} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__no_vendor_mapping__">{t('admin.noVendorConfigured')}</SelectItem>
+                        {form.vendorId && !vendorsQuery.data?.some((vendor) => vendor.id === form.vendorId) ? (
+                          <SelectItem value={form.vendorId} disabled>{t('admin.currentVendorMappingUnavailable', { vendorId: form.vendorId })}</SelectItem>
+                        ) : null}
+                        {(vendorsQuery.data ?? []).map((vendor) => (
+                          <SelectItem key={vendor.id} value={vendor.id}>
+                            {vendor.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </SelectRoot>
+                    <p className="text-sm text-muted-foreground">
+                      {!vendorsQuery.isLoading && vendorsQuery.isError
+                        ? t('admin.vendorMappingLoadFailed')
+                        : t('admin.cloudRegistrationNeedsVendor')}
+                    </p>
+                  </>
+                )}
+              </div>
+              <div className="form-field">
+                <Label htmlFor="adminpackagespage-select-3">{t('admin.period')}</Label>
+                <SelectRoot value={String(form.period)} onValueChange={(event) => setForm({ ...form, period: Number(event) })}><SelectTrigger id="adminpackagespage-select-3" aria-label={t('admin.period')}><SelectValue /></SelectTrigger><SelectContent>
                   {PERIODS.map((period) => (
-                    <option key={period} value={period}>
+                    <SelectItem key={period} value={String(period)}>
                       {PACKAGE_PERIOD_MAP[period]}
-                    </option>
+                    </SelectItem>
                   ))}
-                </Select>
+                </SelectContent></SelectRoot>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.trafficQuotaGb')}</Label>
+            <div className="form-grid">
+              <div className="form-field">
+                <Label htmlFor="package-traffic-quota">{t('admin.trafficQuotaGb')}</Label>
                 <Input
+                  id="package-traffic-quota"
                   type="number"
                   value={form.trafficGb}
                   onChange={(event) => setForm({ ...form, trafficGb: event.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t('admin.bandwidthLimit')}</Label>
+              <div className="form-field">
+                <Label htmlFor="package-bandwidth-limit">{t('admin.bandwidthLimit')}</Label>
                 <Input
+                  id="package-bandwidth-limit"
                   type="number"
                   value={form.bandwidthLimit}
                   onChange={(event) => setForm({ ...form, bandwidthLimit: event.target.value })}
                 />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.domainLimit')}</Label>
+            <div className="form-grid">
+              <div className="form-field">
+                <Label htmlFor="package-domain-limit">{t('admin.domainLimit')}</Label>
                 <Input
+                  id="package-domain-limit"
                   type="number"
                   value={form.domainLimit}
                   onChange={(event) => setForm({ ...form, domainLimit: event.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t('admin.requestQuota')}</Label>
+              <div className="form-field">
+                <Label htmlFor="package-request-quota">{t('admin.requestQuota')}</Label>
                 <Input
+                  id="package-request-quota"
                   type="number"
                   value={form.requestQuota}
                   onChange={(event) => setForm({ ...form, requestQuota: event.target.value })}
                 />
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.price')}</Label>
+            <div className="form-grid">
+              <div className="form-field">
+                <Label htmlFor="package-price">{t('admin.price')}</Label>
                 <Input
+                  id="package-price"
                   type="number"
                   step="0.01"
                   value={form.price}
                   onChange={(event) => setForm({ ...form, price: event.target.value })}
                 />
               </div>
-              <div className="space-y-2">
-                <Label>{t('admin.overQuotaPolicy')}</Label>
-                <Select
-                  value={form.overQuotaPolicy}
-                  onChange={(event) =>
-                    setForm({ ...form, overQuotaPolicy: Number(event.target.value) })
-                  }
-                >
+              <div className="form-field">
+                <Label htmlFor="adminpackagespage-select-4">{t('admin.overQuotaPolicy')}</Label>
+                <SelectRoot value={String(form.overQuotaPolicy)} onValueChange={(event) =>
+                    setForm({ ...form, overQuotaPolicy: Number(event) })
+                  }><SelectTrigger id="adminpackagespage-select-4" aria-label={t('admin.overQuotaPolicy')}><SelectValue /></SelectTrigger><SelectContent>
                   {OVER_QUOTA_POLICIES.map((policy) => (
-                    <option key={policy} value={policy}>
+                    <SelectItem key={policy} value={String(policy)}>
                       {OVER_QUOTA_POLICY_MAP[policy]}
-                    </option>
+                    </SelectItem>
                   ))}
-                </Select>
+                </SelectContent></SelectRoot>
               </div>
             </div>
-            <div className="grid gap-3 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label>{t('admin.sort')}</Label>
+            <div className="form-grid">
+              <div className="form-field">
+                <Label htmlFor="package-sort">{t('admin.sort')}</Label>
                 <Input
+                  id="package-sort"
                   type="number"
                   value={form.sort}
                   onChange={(event) => setForm({ ...form, sort: event.target.value })}
                 />
               </div>
-              <div className="flex items-center justify-between rounded-md border px-3 py-2">
-                <Label>{t('common.status')}</Label>
+              <label className="control-row justify-between rounded-md border px-3">
+                <span>{t('common.status')}</span>
                 <Switch
                   checked={form.status === PackageStatus.ONLINE}
                   onCheckedChange={(checked) =>
                     setForm({ ...form, status: checked ? PackageStatus.ONLINE : PackageStatus.OFFLINE })
                   }
                 />
-              </div>
+            </label>
             </div>
 
             <div className="space-y-2 rounded-md border p-3">
               <p className="text-sm font-medium">{t('admin.featureFlags')}</p>
               {FEATURE_FLAGS.map((flag) => (
-                <div key={flag} className="flex items-center justify-between">
+                <label key={flag} className="control-row justify-between">
                   <span className="text-sm text-muted-foreground">
                     {t(`packages.feature.${flag}`)}
                   </span>
@@ -584,11 +644,12 @@ export function AdminPackagesPage() {
                       setForm({ ...form, features: { ...form.features, [flag]: checked } })
                     }
                   />
-                </div>
+                </label>
               ))}
-              <div className="flex items-center justify-between pt-1">
-                <Label>{t('packages.maxCacheRules')}</Label>
+              <div className="control-row justify-between pt-1">
+                <Label htmlFor="package-max-cache-rules">{t('packages.maxCacheRules')}</Label>
                 <Input
+                  id="package-max-cache-rules"
                   type="number"
                   className="w-32"
                   value={form.maxCacheRules}
@@ -597,7 +658,7 @@ export function AdminPackagesPage() {
               </div>
             </div>
           </div>
-          <DialogFooter>
+          <DialogFooter className="form-actions">
             <Button
               variant="outline"
               onClick={() => {

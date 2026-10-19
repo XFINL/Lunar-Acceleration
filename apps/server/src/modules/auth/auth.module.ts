@@ -6,10 +6,12 @@ import type { JwtConfig } from '../../config/configuration'
 import { AuthController } from './auth.controller'
 import { AuthService } from './auth.service'
 import { JwtStrategy } from './strategies/jwt.strategy'
+import { SettingModule } from '../setting/setting.module'
 
 @Module({
   imports: [
     PassportModule,
+    SettingModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],

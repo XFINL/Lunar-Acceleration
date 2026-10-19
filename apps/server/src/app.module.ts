@@ -4,6 +4,11 @@ import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
 import configuration, { type ThrottleConfig } from './config/configuration'
 import { AuditModule } from './modules/audit/audit.module'
+import { DomainModule } from './modules/domain/domain.module'
+import { DomainConfigModule } from './modules/domain/domain-config.module'
+import { CertificateModule } from './modules/certificate/certificate.module'
+import { VendorModule } from './modules/vendor/vendor.module'
+import { DomainResourceModule } from './modules/domain-resource/domain-resource.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { OrderModule } from './modules/order/order.module'
 import { PackageModule } from './modules/package/package.module'
@@ -49,6 +54,11 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware'
     OrderModule,
     SettingModule,
     AuditModule,
+    DomainModule,
+    DomainConfigModule,
+    DomainResourceModule,
+    CertificateModule,
+    VendorModule,
   ],
   providers: [
     // 限流 -> 认证

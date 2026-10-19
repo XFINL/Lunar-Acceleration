@@ -1,32 +1,10 @@
+import * as React from 'react'
+import * as SwitchPrimitive from '@radix-ui/react-switch'
 import { cn } from '@/lib/utils'
-
-interface SwitchProps {
-  checked: boolean
-  onCheckedChange: (checked: boolean) => void
-  disabled?: boolean
-  className?: string
-}
-
-export function Switch({ checked, onCheckedChange, disabled, className }: SwitchProps) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={() => onCheckedChange(!checked)}
-      className={cn(
-        'relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50',
-        checked ? 'bg-primary' : 'bg-input',
-        className,
-      )}
-    >
-      <span
-        className={cn(
-          'inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform',
-          checked ? 'translate-x-4' : 'translate-x-0.5',
-        )}
-      />
-    </button>
-  )
-}
+const Switch = React.forwardRef<React.ElementRef<typeof SwitchPrimitive.Root>, React.ComponentPropsWithoutRef<typeof SwitchPrimitive.Root>>(({ className, ...props }, ref) => (
+  <SwitchPrimitive.Root ref={ref} className={cn('frosted-control peer inline-flex h-6 w-11 shrink-0 cursor-pointer items-center rounded-full border border-input transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50 data-[state=checked]:border-primary data-[state=checked]:bg-primary', className)} {...props}>
+    <SwitchPrimitive.Thumb className="pointer-events-none block h-5 w-5 rounded-full bg-foreground/80 shadow-sm ring-0 transition-transform data-[state=checked]:translate-x-[22px] data-[state=checked]:bg-primary-foreground data-[state=unchecked]:translate-x-0" />
+  </SwitchPrimitive.Root>
+))
+Switch.displayName = SwitchPrimitive.Root.displayName
+export { Switch }

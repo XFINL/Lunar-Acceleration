@@ -168,3 +168,22 @@ export const PAY_CHANNEL_MAP: Record<PayChannel, string> = {
 export const ORDER_ITEM_TYPES = ['package', 'traffic_pack', 'bandwidth_pack'] as const
 export type OrderItemType = (typeof ORDER_ITEM_TYPES)[number]
 
+
+
+// ============================================================
+// M3 域名状态（domains.status / audit_status）
+// ============================================================
+export enum DomainStatus {
+  PENDING_REVIEW = 1,
+  DEPLOYING = 2,
+  ENABLED = 3,
+  DISABLED = 4,
+  REJECTED = 5,
+  DELETED = 6,
+}
+
+export enum DomainAuditStatus {
+  PENDING = 1,
+  APPROVED = 2,
+  REJECTED = 3,
+}

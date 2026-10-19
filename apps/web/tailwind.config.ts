@@ -11,6 +11,11 @@ export default {
       screens: { '2xl': '1400px' },
     },
     extend: {
+      fontSize: {
+        body: ['1rem', { lineHeight: '1.65' }],
+        'page-title': ['clamp(1.5rem, calc(1.35rem + 0.65vw), 2rem)', { lineHeight: '1.2', fontWeight: '600' }],
+        stat: ['clamp(1.5rem, calc(1.25rem + 1vw), 2.25rem)', { lineHeight: '1.15', fontWeight: '600' }],
+      },
       colors: {
         border: 'hsl(var(--border))',
         input: 'hsl(var(--input))',
@@ -28,6 +33,18 @@ export default {
         destructive: {
           DEFAULT: 'hsl(var(--destructive))',
           foreground: 'hsl(var(--destructive-foreground))',
+        },
+        success: {
+          DEFAULT: 'hsl(var(--secondary))',
+          foreground: 'hsl(var(--secondary-foreground))',
+        },
+        warning: {
+          DEFAULT: 'hsl(var(--muted))',
+          foreground: 'hsl(var(--muted-foreground))',
+        },
+        info: {
+          DEFAULT: 'hsl(var(--accent))',
+          foreground: 'hsl(var(--accent-foreground))',
         },
         muted: {
           DEFAULT: 'hsl(var(--muted))',

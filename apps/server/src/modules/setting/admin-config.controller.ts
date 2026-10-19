@@ -47,7 +47,6 @@ const ALLOWED_UPLOAD_MIME = new Set([
   'image/png',
   'image/gif',
   'image/webp',
-  'image/svg+xml',
   'image/x-icon',
   'image/vnd.microsoft.icon',
   'application/pdf',
@@ -55,6 +54,23 @@ const ALLOWED_UPLOAD_MIME = new Set([
   'application/x-zip-compressed',
 ])
 const MAX_UPLOAD_SIZE = 10 * 1024 * 1024
+
+function hasSafeFileSignature(file: Express.Multer.File): boolean {
+  const b = file.buffer
+  if (!b || b.length < 4) return false
+  switch (file.mimetype) {
+    case 'image/jpeg': return b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff
+    case 'image/png': return b.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))
+    case 'image/gif': return b.subarray(0, 6).toString('ascii').match(/^GIF8[79]a$/) !== null
+    case 'image/webp': return b.subarray(0, 4).toString('ascii') === 'RIFF' && b.subarray(8, 12).toString('ascii') === 'WEBP'
+    case 'image/x-icon':
+    case 'image/vnd.microsoft.icon': return b[0] === 0 && b[1] === 0 && b[2] === 1 && b[3] === 0
+    case 'application/pdf': return b.subarray(0, 5).toString('ascii') === '%PDF-'
+    case 'application/zip':
+    case 'application/x-zip-compressed': return b[0] === 0x50 && b[1] === 0x4b && [0x03, 0x05, 0x07].includes(b[2])
+    default: return false
+  }
+}
 
 class ConfigItemDto {
   @ApiPropertyOptional({ description: '配置键' })
@@ -149,10 +165,10 @@ export class AdminConfigController {
     if (!file) {
       throw new BusinessException(ErrorCode.PARAM_INVALID, '请选择要上传的文件')
     }
-    if (!ALLOWED_UPLOAD_MIME.has(file.mimetype)) {
+    if (!ALLOWED_UPLOAD_MIME.has(file.mimetype) || !hasSafeFileSignature(file)) {
       throw new BusinessException(
         ErrorCode.PARAM_INVALID,
-        `不支持的文件类型：${file.mimetype}（仅支持图片 / PDF / ZIP）`,
+        `不支持或内容不匹配的文件类型：${file.mimetype}（SVG 禁用，仅支持签名校验通过的图片 / PDF / ZIP）`,
       )
     }
     return this.localStorage.save(file, type || 'site')

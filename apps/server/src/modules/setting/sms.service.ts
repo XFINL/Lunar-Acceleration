@@ -24,7 +24,7 @@ export class SmsService {
     provider: string
     simulated: boolean
   }> {
-    const config = await this.settingService.getPublicSiteConfig('sms')
+    const config = await this.settingService.getInternalSiteConfigGroup('sms')
     const provider = readString(config.provider)
 
     if (!provider || !readString(config.signName) || !readString(config.templateCode)) {

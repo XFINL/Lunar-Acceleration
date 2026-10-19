@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Search, ShoppingCart } from 'lucide-react'
+import { Search } from 'lucide-react'
 import { toast } from 'sonner'
 import {
   PACKAGE_PERIOD_MAP,
@@ -140,11 +140,11 @@ export function PackagesPage() {
   })
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader title={t('packages.title')} description={t('packages.desc')} />
 
       {/* 我的套餐 */}
-      <Card className="mb-4">
+      <Card>
         <CardHeader>
           <CardTitle>{t('packages.myPackage')}</CardTitle>
         </CardHeader>
@@ -162,23 +162,23 @@ export function PackagesPage() {
                 </span>
               </div>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div className="rounded-lg border p-3">
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">{t('packages.traffic')}</p>
                   <p className="text-sm font-medium">
                     {formatBytes(myPackage.trafficUsed)} / {formatBytes(myPackage.trafficQuota)}
                   </p>
                 </div>
-                <div className="rounded-lg border p-3">
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">{t('packages.requests')}</p>
                   <p className="text-sm font-medium">
                     {formatCount(myPackage.requestUsed)} / {formatCount(myPackage.requestQuota)}
                   </p>
                 </div>
-                <div className="rounded-lg border p-3">
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">{t('packages.domains')}</p>
                   <p className="text-sm font-medium">{myPackage.domainLimit}</p>
                 </div>
-                <div className="rounded-lg border p-3">
+                <div className="space-y-1">
                   <p className="text-xs text-muted-foreground">{t('packages.bandwidth')}</p>
                   <p className="text-sm font-medium">{formatBandwidth(myPackage.bandwidthLimit)}</p>
                 </div>
@@ -194,9 +194,9 @@ export function PackagesPage() {
       </Card>
 
       {/* 筛选 */}
-      <Card className="mb-4">
-        <CardContent className="flex flex-wrap items-end gap-3 p-4">
-          <div className="flex min-w-[12rem] flex-1 items-center gap-2">
+      <Card>
+        <CardContent className="filter-toolbar p-4 md:p-6">
+          <div className="control-row min-w-[12rem] flex-1">
             <Input
               placeholder={t('common.keyword')}
               value={keyword}
@@ -214,8 +214,9 @@ export function PackagesPage() {
                 setPage(1)
                 setAppliedKeyword(keyword)
               }}
+              aria-label={t('common.search')}
             >
-              <Search className="h-4 w-4" />
+              <Search className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
           <Button
@@ -261,7 +262,7 @@ export function PackagesPage() {
                   </CardHeader>
                   <CardContent className="flex flex-1 flex-col justify-between gap-4">
                     <div className="space-y-2">
-                      <p className="text-2xl font-semibold text-primary">
+                      <p className="numeric text-2xl font-semibold text-foreground">
                         ¥ {pkg.price}
                         <span className="ml-1 text-sm font-normal text-muted-foreground">
                           / {PACKAGE_PERIOD_MAP[pkg.period as PackagePeriod] ?? '-'}
@@ -292,7 +293,7 @@ export function PackagesPage() {
                       ) : null}
                     </div>
                     <Button className="w-full" onClick={() => setBuyTarget(pkg)}>
-                      <ShoppingCart className="h-4 w-4" />
+
                       {t('packages.buyNow')}
                     </Button>
                   </CardContent>
@@ -316,21 +317,25 @@ export function PackagesPage() {
             <DialogTitle>{t('packages.buyTitle')}</DialogTitle>
             <DialogDescription>{buyTarget?.name}</DialogDescription>
           </DialogHeader>
-          <div className="space-y-2">
-            <Label>{t('packages.quantity')}</Label>
+          <div className="form-field">
+            <Label htmlFor="package-quantity">{t('packages.quantity')}</Label>
             <Input
+              id="package-quantity"
               type="number"
               min={1}
+              max={120}
+              step={1}
               value={quantity}
               onChange={(event) => setQuantity(event.target.value)}
             />
+            <p className="text-xs text-muted-foreground">{t('packages.purchasePolicy')}</p>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setBuyTarget(null)}>
               {t('common.cancel')}
             </Button>
             <Button
-              disabled={buyMutation.isPending || (Number(quantity) || 0) < 1}
+              disabled={buyMutation.isPending || !Number.isInteger(Number(quantity)) || Number(quantity) < 1 || Number(quantity) > 120}
               onClick={() => buyMutation.mutate()}
             >
               {t('common.confirm')}

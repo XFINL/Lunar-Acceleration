@@ -8,15 +8,6 @@
   "engines": {
     "node": ">=20"
   },
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "@nestjs/core",
-      "@prisma/client",
-      "@prisma/engines",
-      "esbuild",
-      "prisma"
-    ]
-  },
   "scripts": {
     "dev": "pnpm -r --parallel dev",
     "dev:server": "pnpm --filter @lunar/server dev",
@@ -30,6 +21,8 @@
     "db:generate": "pnpm --filter @lunar/server prisma:generate",
     "db:migrate": "pnpm --filter @lunar/server prisma:migrate",
     "db:deploy": "pnpm --filter @lunar/server prisma:deploy",
-    "db:seed": "pnpm --filter @lunar/server prisma:seed"
+    "db:seed": "pnpm --filter @lunar/server prisma:seed",
+    "test": "pnpm build:shared && pnpm --filter @lunar/server test && pnpm --filter @lunar/web test",
+    "test:integration": "pnpm build:shared && pnpm --filter @lunar/server test:integration"
   }
 }

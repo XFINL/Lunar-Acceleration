@@ -1,3 +1,14 @@
 packages:
   - 'apps/*'
   - 'packages/*'
+
+# React 19 uses a different element symbol; Recharts 2 must share its react-is version.
+overrides:
+  react-is: '19.3.1'
+
+onlyBuiltDependencies:
+  - '@nestjs/core'
+  - '@prisma/client'
+  - '@prisma/engines'
+  - esbuild
+  - prisma

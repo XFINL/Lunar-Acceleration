@@ -29,7 +29,7 @@ export function LoginLogsPage() {
   })
 
   return (
-    <div>
+    <div className="page-stack">
       <PageHeader title={t('user.loginLogs')} description={t('user.loginLogsDesc')} />
 
       <Card>

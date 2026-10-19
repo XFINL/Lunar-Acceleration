@@ -1,33 +1,36 @@
-import { useEffect, useState } from 'react'
-import { Moon, Sun } from 'lucide-react'
-import { Button } from '@/components/ui/button'
-
-const STORAGE_KEY = 'lunar-theme'
-
-function applyTheme(dark: boolean): void {
-  document.documentElement.classList.toggle('dark', dark)
-}
+import { useEffect, useId, useState } from 'react'
+import { useTranslation } from 'react-i18next'
+import { Label } from '@/components/ui/label'
+import { Switch } from '@/components/ui/switch'
+import { readThemePreference, THEME_STORAGE_KEY } from '@/lib/theme'
 
 export function ThemeToggle() {
-  const [dark, setDark] = useState(() => {
-    const stored = localStorage.getItem(STORAGE_KEY)
-    if (stored) return stored === 'dark'
-    return window.matchMedia('(prefers-color-scheme: dark)').matches
-  })
+  const { t } = useTranslation()
+  const id = useId()
+  const [dark, setDark] = useState(readThemePreference)
 
   useEffect(() => {
-    applyTheme(dark)
-    localStorage.setItem(STORAGE_KEY, dark ? 'dark' : 'light')
+    document.documentElement.classList.toggle('dark', dark)
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, dark ? 'dark' : 'light')
+    } catch {
+      // The theme remains usable when persistence is unavailable.
+    }
   }, [dark])
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label="toggle theme"
-      onClick={() => setDark((value) => !value)}
-    >
-      {dark ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-    </Button>
+    <div className="inline-flex h-[var(--control-height)] shrink-0 items-center gap-2">
+      <Label htmlFor={id} className="hidden text-sm leading-5 text-muted-foreground sm:inline">
+        {t('common.darkMode')}
+      </Label>
+      <Switch
+        id={id}
+        aria-label={t('common.darkMode')}
+        title={t('common.darkMode')}
+        checked={dark}
+        onCheckedChange={setDark}
+        className="relative before:absolute before:inset-x-0 before:-inset-y-2.5 before:content-['']"
+      />
+    </div>
   )
 }

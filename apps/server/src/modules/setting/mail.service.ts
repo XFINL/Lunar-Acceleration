@@ -22,7 +22,7 @@ export class MailService {
   constructor(private readonly settingService: SettingService) {}
 
   async sendTestMail(to: string): Promise<{ to: string; messageId: string }> {
-    const config = await this.settingService.getPublicSiteConfig('email')
+    const config = await this.settingService.getInternalSiteConfigGroup('email')
     const host = readString(config.host)
     const user = readString(config.user)
     const pass = readString(config.pass)

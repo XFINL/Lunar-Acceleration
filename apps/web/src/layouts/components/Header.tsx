@@ -1,97 +1,71 @@
-import { useState } from 'react'
+import type { Ref } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LogOut, Menu, ShieldCheck, User as UserIcon } from 'lucide-react'
+import { Menu } from 'lucide-react'
 import { RoleType } from '@lunar/shared'
 import { authApi } from '@/api/auth'
-import { Avatar } from '@/components/ui/avatar'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuLabel, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { GlassSurface } from '@/components/common/GlassSurface'
 import { LanguageSwitcher } from '@/components/common/LanguageSwitcher'
 import { ThemeToggle } from '@/components/common/ThemeToggle'
 import { useAuthStore } from '@/stores/auth'
 
-export function Header({ onMenuClick }: { onMenuClick: () => void }) {
+interface HeaderProps {
+  onMenuClick: () => void
+  sidebarOpen?: boolean
+  menuButtonRef?: Ref<HTMLButtonElement>
+}
+
+export function Header({ onMenuClick, sidebarOpen, menuButtonRef }: HeaderProps) {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const user = useAuthStore((state) => state.user)
   const refreshToken = useAuthStore((state) => state.refreshToken)
   const clear = useAuthStore((state) => state.clear)
-  const [menuOpen, setMenuOpen] = useState(false)
-
-  const roleLabel =
-    user?.roleType === RoleType.SUPER_ADMIN
-      ? t('roleType.superAdmin')
-      : user?.roleType === RoleType.ADMIN
-        ? t('roleType.admin')
-        : t('roleType.user')
+  const userName = user?.nickname ?? user?.username ?? t('nav.account')
+  const roleLabel = user?.roleType === RoleType.SUPER_ADMIN
+    ? t('roleType.superAdmin') : user?.roleType === RoleType.ADMIN
+      ? t('roleType.admin') : t('roleType.user')
 
   const handleLogout = async () => {
     try {
       if (refreshToken) await authApi.logout(refreshToken)
     } catch {
-      // 忽略登出接口异常，本地会话仍需清理
+      // Local sign-out must still work if the endpoint is unavailable.
     }
     clear()
     navigate('/login', { replace: true })
   }
 
   return (
-    <header className="sticky top-0 z-20 flex h-14 items-center gap-3 border-b bg-background/95 px-4 backdrop-blur">
-      <Button variant="ghost" size="icon" className="lg:hidden" onClick={onMenuClick}>
-        <Menu className="h-4 w-4" />
-      </Button>
-
-      <div className="flex-1" />
-
-      <LanguageSwitcher />
-      <ThemeToggle />
-
-      <div className="relative">
-        <button
-          type="button"
-          onClick={() => setMenuOpen((value) => !value)}
-          className="flex items-center gap-2 rounded-md px-1.5 py-1 transition-colors hover:bg-accent"
-        >
-          <Avatar name={user?.nickname ?? user?.username} src={user?.avatar} className="h-8 w-8" />
-          <span className="hidden text-sm font-medium sm:block">
-            {user?.nickname ?? user?.username}
-          </span>
-        </button>
-
-        {menuOpen ? (
-          <>
-            <div className="fixed inset-0 z-10" onClick={() => setMenuOpen(false)} aria-hidden />
-            <div className="absolute right-0 z-20 mt-2 w-56 animate-fade-in rounded-lg border bg-popover p-2 shadow-lg">
-              <div className="flex items-center gap-2 rounded-md px-2 py-2">
-                <Avatar name={user?.nickname ?? user?.username} src={user?.avatar} />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium">{user?.username}</p>
-                  <p className="text-xs text-muted-foreground">{user?.balance ?? '0.00'}</p>
-                </div>
-              </div>
-              <div className="px-2 pb-2">
-                <Badge variant={user?.roleType === RoleType.USER ? 'secondary' : 'default'}>
-                  {user?.roleType === RoleType.USER ? (
-                    <UserIcon className="mr-1 h-3 w-3" />
-                  ) : (
-                    <ShieldCheck className="mr-1 h-3 w-3" />
-                  )}
-                  {roleLabel}
-                </Badge>
-              </div>
-              <div className="my-1 h-px bg-border" />
-              <button
-                type="button"
-                onClick={handleLogout}
-                className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-sm text-destructive transition-colors hover:bg-destructive/10"
-              >
-                <LogOut className="h-4 w-4" />
-                {t('auth.logout')}
-              </button>
-            </div>
-          </>
-        ) : null}
+    <header className="sticky top-4 z-20 isolate mx-4 mt-4 flex min-h-16 items-center rounded-3xl border border-border/60 px-2 py-2 sm:mx-6 sm:px-4">
+      <div className="pointer-events-none absolute inset-0 z-0 rounded-[inherit]" aria-hidden="true">
+        <GlassSurface variant="liquid" className="absolute inset-0 h-full w-full rounded-[inherit] border-0 shadow-none" radius={24} />
+      </div>
+      <div className="relative z-10 flex min-w-0 w-full items-center justify-between gap-1.5 sm:justify-start sm:gap-3">
+        <Button ref={menuButtonRef} variant="ghost" size="icon" className="shrink-0 rounded-full lg:hidden" onClick={onMenuClick} aria-label={t('common.openNavigation')} aria-expanded={sidebarOpen ?? false} aria-controls="primary-navigation">
+          <Menu className="h-4 w-4" aria-hidden="true" />
+        </Button>
+        <div className="hidden min-w-0 flex-1 sm:block" />
+        <LanguageSwitcher />
+        <ThemeToggle />
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="ghost" className="frosted-control min-w-0 max-w-[24vw] shrink rounded-full px-2 sm:max-w-52 sm:px-3" aria-label={t('nav.account')}>
+              <span className="truncate">{userName}</span>
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-64">
+            <DropdownMenuLabel className="space-y-1 break-words">
+              <p className="font-semibold">{user?.username ?? userName}</p>
+              <p className="text-xs font-normal text-muted-foreground">{roleLabel}</p>
+              <p className="text-xs font-normal text-muted-foreground">{user?.balance ?? '0.00'}</p>
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onSelect={() => { void handleLogout() }}>{t('auth.logout')}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </header>
   )

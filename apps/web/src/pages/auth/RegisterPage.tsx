@@ -9,11 +9,17 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuthStore } from '@/stores/auth'
+import { useSiteConfig } from '@/components/common/SiteConfigProvider'
 
 export function RegisterPage() {
   const { t } = useTranslation()
   const navigate = useNavigate()
   const setSession = useAuthStore((state) => state.setSession)
+  const siteConfig = useSiteConfig()
+  const registrationOpen = siteConfig.register.open !== false
+  const needsEmail = siteConfig.register.needEmail === true
+  const needsInvite = siteConfig.register.inviteRequired === true
+  const needsCaptcha = siteConfig.register.needCaptcha !== false
 
   const [username, setUsername] = useState('')
   const [email, setEmail] = useState('')
@@ -36,8 +42,8 @@ export function RegisterPage() {
   }, [t])
 
   useEffect(() => {
-    void loadCaptcha()
-  }, [loadCaptcha])
+    if (needsCaptcha) void loadCaptcha()
+  }, [loadCaptcha, needsCaptcha])
 
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -48,8 +54,7 @@ export function RegisterPage() {
         password,
         email: email || undefined,
         inviteCode: inviteCode || undefined,
-        captcha,
-        captchaId,
+        ...(needsCaptcha ? { captcha, captchaId } : {}),
       })
       setSession(result, result.user)
       toast.success(t('auth.registerSuccess'))
@@ -63,14 +68,16 @@ export function RegisterPage() {
     }
   }
 
+  if (!registrationOpen) return <p className="text-center text-sm text-muted-foreground">目前暫不開放註冊。</p>
+
   return (
-    <form className="space-y-5" onSubmit={handleSubmit}>
+    <form className="page-stack" onSubmit={handleSubmit}>
       <div className="space-y-1.5">
         <h2 className="text-lg font-semibold">{t('auth.registerTitle')}</h2>
         <p className="text-sm text-muted-foreground">{t('auth.registerSubtitle')}</p>
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="username">{t('auth.username')}</Label>
         <Input
           id="username"
@@ -81,20 +88,21 @@ export function RegisterPage() {
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="email">
-          {t('auth.email')} <span className="text-muted-foreground">({t('common.optional')})</span>
+          {t('auth.email')} {!needsEmail ? <span className="text-muted-foreground">({t('common.optional')})</span> : null}
         </Label>
         <Input
           id="email"
           type="email"
           autoComplete="email"
           value={email}
+          required={needsEmail}
           onChange={(event) => setEmail(event.target.value)}
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="password">{t('auth.password')}</Label>
         <Input
           id="password"
@@ -107,21 +115,22 @@ export function RegisterPage() {
         <p className="text-xs text-muted-foreground">{t('auth.passwordHint')}</p>
       </div>
 
-      <div className="space-y-2">
+      <div className="form-field">
         <Label htmlFor="inviteCode">
           {t('auth.inviteCode')}{' '}
-          <span className="text-muted-foreground">({t('common.optional')})</span>
+          {!needsInvite ? <span className="text-muted-foreground">({t('common.optional')})</span> : null}
         </Label>
         <Input
           id="inviteCode"
           value={inviteCode}
+          required={needsInvite}
           onChange={(event) => setInviteCode(event.target.value)}
         />
       </div>
 
-      <div className="space-y-2">
+      {needsCaptcha ? <div className="form-field">
         <Label htmlFor="captcha">{t('auth.captcha')}</Label>
-        <div className="flex items-center gap-2">
+        <div className="control-row">
           <Input
             id="captcha"
             value={captcha}
@@ -131,17 +140,18 @@ export function RegisterPage() {
           <button
             type="button"
             onClick={() => void loadCaptcha()}
-            className="flex h-9 w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-md border bg-muted"
+            className="frosted-control flex h-9 w-[120px] shrink-0 items-center justify-center overflow-hidden rounded-xl"
+            aria-label={t('common.refresh')}
             title={t('common.refresh')}
           >
             {captchaImage ? (
-              <img src={captchaImage} alt="captcha" className="h-full w-full object-contain" />
+              <img src={captchaImage} alt="captcha" className="h-full w-full object-contain grayscale" />
             ) : (
               <RefreshCw className="h-4 w-4 animate-spin text-muted-foreground" />
             )}
           </button>
         </div>
-      </div>
+      </div> : null}
 
       <Button type="submit" className="w-full" disabled={submitting}>
         {submitting ? t('common.loading') : t('auth.register')}
@@ -149,7 +159,7 @@ export function RegisterPage() {
 
       <p className="text-center text-sm text-muted-foreground">
         {t('auth.hasAccount')}{' '}
-        <Link to="/login" className="font-medium text-primary hover:underline">
+        <Link to="/login" className="font-medium text-foreground hover:underline">
           {t('auth.goLogin')}
         </Link>
       </p>
