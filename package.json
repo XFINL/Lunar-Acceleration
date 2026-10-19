@@ -23,6 +23,14 @@
     "db:deploy": "pnpm --filter @lunar/server prisma:deploy",
     "db:seed": "pnpm --filter @lunar/server prisma:seed",
     "test": "pnpm build:shared && pnpm --filter @lunar/server test && pnpm --filter @lunar/web test",
-    "test:integration": "pnpm build:shared && pnpm --filter @lunar/server test:integration"
+    "test:integration": "pnpm build:shared && pnpm --filter @lunar/server test:integration",
+    "verify": "node scripts/verify.mjs",
+    "test:verify": "node --test scripts/verify.test.mjs"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.39.5",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "typescript-eslint": "^8.71.2"
   }
 }

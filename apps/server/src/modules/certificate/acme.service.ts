@@ -1,6 +1,6 @@
 import { ForbiddenException, Injectable, NotFoundException, Optional, Inject } from '@nestjs/common'
 import { ConfigService } from '@nestjs/config'
-import { createHash, createPrivateKey, X509Certificate } from 'node:crypto'
+import { createHash, createPrivateKey } from 'node:crypto'
 import { Resolver } from 'node:dns/promises'
 import { domainToASCII } from 'node:url'
 import * as acme from 'acme-client'

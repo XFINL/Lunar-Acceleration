@@ -1,4 +1,5 @@
 import { isIP } from 'node:net'
+import { X509Certificate, createHash } from 'node:crypto'
 import { domainToASCII } from 'node:url'
 import {
   VendorConnectionResult,
@@ -7,6 +8,8 @@ import {
   VendorDomainPage,
   VendorDriver,
   VendorDriverError,
+  VendorDeploymentConfig,
+  VendorDeploymentResult,
   VendorRegistrationInput,
 } from './vendor-driver'
 
@@ -215,12 +218,108 @@ export class CloudflareDriver implements VendorDriver {
     await this.getJson(itemUrl, { method: 'DELETE', allowNotFound: true })
   }
 
+  async deployManagedConfig(externalId: string, config: VendorDeploymentConfig): Promise<void> {
+    const hostname = cleanHostname(config?.hostname)
+    if (!hostname || externalId.length > 128 || !/^[A-Za-z0-9_-]{1,128}$/.test(externalId) || !config.origin || config.origin.host
+      || config.origin.protocol !== 'https' || config.origin.port !== 443 || isIP(config.origin.address)
+      || !Number.isInteger(config.defaultTtl) || config.defaultTtl < 1 || config.defaultTtl > 31_536_000
+      || config.tls.forceHttps || config.tls.hstsEnabled || config.tls.tlsVersion !== 'TLSv1.2') fail('UNSUPPORTED_OPERATION')
+    if (!cleanHostname(config.origin.address)) fail('INVALID_CONFIG')
+    if (config.tls.enabled && (!config.certificate?.privateKeyPem || !this.certificateFingerprint(config.certificate?.certificatePem))) fail('INVALID_CONFIG')
+    const itemUrl = `${API_ROOT}/zones/${this.zoneId}/custom_hostnames/${encodeURIComponent(externalId)}`
+    const before = await this.getJson(itemUrl)
+    if (!isObject(before.result) || before.result.id !== externalId || cleanHostname(before.result.hostname) !== hostname) fail('RESOURCE_CONFLICT')
+    // Complete reads and conflict checks before any write so a read-side 429 is safely retryable.
+    const cachePlan = await this.preflightManagedCacheRule(hostname, config.defaultTtl)
+    const body: JsonObject = { custom_origin_server: config.origin.address }
+    if (config.tls.enabled) {
+      if (!config.certificate?.certificatePem || !config.certificate.privateKeyPem) fail('INVALID_CONFIG')
+      body.ssl = { custom_certificate: config.certificate.certificatePem, custom_key: config.certificate.privateKeyPem }
+    }
+    await this.getJson(itemUrl, { method: 'PATCH', body })
+    await this.putManagedCacheRule(hostname, config.defaultTtl, cachePlan)
+  }
+
+  async verifyManagedConfig(externalId: string, config: VendorDeploymentConfig): Promise<VendorDeploymentResult> {
+    const hostname = cleanHostname(config?.hostname)
+    if (!hostname || !/^[A-Za-z0-9_-]{1,128}$/.test(externalId)) fail('INVALID_CONFIG')
+    const item = await this.getJson(`${API_ROOT}/zones/${this.zoneId}/custom_hostnames/${encodeURIComponent(externalId)}`)
+    const result = item.result
+    if (!isObject(result) || result.id !== externalId || cleanHostname(result.hostname) !== hostname || result.custom_origin_server !== config.origin.address) fail('INVALID_RESPONSE')
+    if (config.tls.enabled) {
+      const ssl = isObject(result.ssl) ? result.ssl : null
+      if (!ssl || ssl.status !== 'active') fail('UPSTREAM_ERROR')
+      const wantedFingerprint = this.certificateFingerprint(config.certificate?.certificatePem)
+      const certificates = ssl.custom_certificates
+      if (!Array.isArray(certificates) || !certificates.some((certificate: unknown) => isObject(certificate)
+        && this.fingerprintMatches(certificate.fingerprint, wantedFingerprint))) fail('UPSTREAM_ERROR')
+    }
+    const entry = await this.getJson(`${API_ROOT}/zones/${this.zoneId}/rulesets/phases/http_request_cache_settings/entrypoint`)
+    if (!this.hasManagedCacheRule(entry, hostname, config.defaultTtl)) fail('UPSTREAM_ERROR')
+    const status = cleanStatus(result.status) ?? 'unknown'
+    return { verified: true, providerStatus: status, applied: config.tls.enabled ? ['origin', 'cache', 'certificate'] : ['origin', 'cache'], verifiedAt: new Date().toISOString() }
+  }
+
+  private cacheRuleDescription(hostname: string) { return `Lunar managed cache TTL: ${hostname}` }
+
+  private cacheRule(hostname: string, ttl: number): JsonObject {
+    const escaped = hostname.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
+    return { expression: `(http.host eq "${escaped}")`, description: this.cacheRuleDescription(hostname), action: 'set_cache_settings', action_parameters: { cache: true, edge_ttl: { mode: 'override_origin', default: ttl } }, enabled: true }
+  }
+
+  private hasManagedCacheRule(payload: JsonObject, hostname: string, ttl: number): boolean {
+    if (!isObject(payload.result) || !Array.isArray(payload.result.rules)) return false
+    const wanted = this.cacheRule(hostname, ttl)
+    return payload.result.rules.some((rule: unknown) => isObject(rule) && rule.description === wanted.description && rule.expression === wanted.expression
+      && rule.enabled === true && rule.action === wanted.action && isObject(rule.action_parameters) && rule.action_parameters.cache === true
+      && isObject(rule.action_parameters.edge_ttl) && rule.action_parameters.edge_ttl.mode === 'override_origin' && rule.action_parameters.edge_ttl.default === ttl)
+  }
+
+  private async preflightManagedCacheRule(hostname: string, ttl: number): Promise<{ mode: 'create' } | { mode: 'append'; rulesetId: string } | { mode: 'present' }> {
+    const entryUrl = `${API_ROOT}/zones/${this.zoneId}/rulesets/phases/http_request_cache_settings/entrypoint`
+    const current = await this.getJson(entryUrl, { allowNotFound: true })
+    const wanted = this.cacheRule(hostname, ttl)
+    if (current === null) return { mode: 'create' }
+    if (!isObject(current.result) || !Array.isArray(current.result.rules) || typeof current.result.id !== 'string') fail('INVALID_RESPONSE')
+    const existing = current.result.rules.find((rule: unknown) => isObject(rule) && rule.description === wanted.description)
+    if (existing) {
+      if (!this.hasManagedCacheRule({ result: { rules: [existing] } }, hostname, ttl)) fail('RESOURCE_CONFLICT')
+      return { mode: 'present' }
+    }
+    return { mode: 'append', rulesetId: current.result.id }
+  }
+
+  private async putManagedCacheRule(hostname: string, ttl: number, plan: { mode: 'create' } | { mode: 'append'; rulesetId: string } | { mode: 'present' }): Promise<void> {
+    const wanted = this.cacheRule(hostname, ttl)
+    if (plan.mode === 'present') return
+    if (plan.mode === 'create') {
+      await this.getJson(`${API_ROOT}/zones/${this.zoneId}/rulesets`, { method: 'POST', body: { name: 'Lunar managed cache rules', description: 'Rules managed by Lunar vendor deploy', kind: 'zone', phase: 'http_request_cache_settings', rules: [wanted] } })
+      return
+    }
+    // The Rulesets API single-rule endpoint preserves all existing zone rules.
+    await this.getJson(`${API_ROOT}/zones/${this.zoneId}/rulesets/${encodeURIComponent(plan.rulesetId)}/rules`, { method: 'POST', body: wanted })
+  }
+
+  private certificateFingerprint(pem: unknown): string {
+    if (typeof pem !== 'string' || pem.length < 32 || pem.length > 64 * 1024) fail('INVALID_CONFIG')
+    try { return createHash('sha256').update(new X509Certificate(pem).raw).digest('hex') }
+    catch { fail('INVALID_CONFIG') }
+  }
+
+  private fingerprintMatches(value: unknown, expectedHex: string): boolean {
+    if (typeof value !== 'string' || value.length > 256) return false
+    const normalized = value.replace(/^sha-?256[:=/\s]*/i, '').replace(/[:\s-]/g, '').toLowerCase()
+    if (normalized === expectedHex) return true
+    const base64Digest = Buffer.from(expectedHex, 'hex').toString('base64')
+    return value.replace(/^sha-?256[:=/\s]*/i, '').replace(/\s/g, '') === base64Digest
+  }
+
   private async getJson(url: string): Promise<JsonObject>
-  private async getJson(url: string, options: { method?: 'GET' | 'POST' | 'DELETE'; body?: JsonObject }): Promise<JsonObject>
-  private async getJson(url: string, options: { allowNotFound: true; method?: 'GET' | 'POST' | 'DELETE'; body?: JsonObject }): Promise<JsonObject | null>
+  private async getJson(url: string, options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: JsonObject }): Promise<JsonObject>
+  private async getJson(url: string, options: { allowNotFound: true; method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: JsonObject }): Promise<JsonObject | null>
   private async getJson(
     url: string,
-    options: { method?: 'GET' | 'POST' | 'DELETE'; body?: JsonObject; allowNotFound?: boolean } = {},
+    options: { method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE'; body?: JsonObject; allowNotFound?: boolean } = {},
   ): Promise<JsonObject | null> {
     let response: Response
     try {

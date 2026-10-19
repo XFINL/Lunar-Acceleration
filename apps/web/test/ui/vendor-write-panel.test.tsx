@@ -69,6 +69,32 @@ describe('Controlled cloud write panel', () => {
     expect(vendorWriteApi.createAccountJob).toHaveBeenCalledWith('9', expect.objectContaining({ action: 'register', domainId: '42', idempotencyKey: expect.any(String) }))
   })
 
+  it('keeps deployment disabled unless the backend explicitly advertises it', async () => {
+    const user = userEvent.setup()
+    renderPanel()
+    await user.click(screen.getByRole('combobox'))
+    expect(screen.getByRole('option', { name: '設定配信と検証' })).toHaveAttribute('aria-disabled', 'true')
+    expect(vendorWriteApi.createAccountJob).not.toHaveBeenCalled()
+  })
+
+  it('confirms deployment separately and sends only an ID, action and idempotency key', async () => {
+    vi.mocked(vendorWriteApi.capabilities).mockResolvedValue({ writesEnabled: true, workerEnabled: true, supportedActions: ['register', 'deploy', 'delete'] })
+    const user = userEvent.setup()
+    renderPanel()
+    await user.type(screen.getByLabelText('域名记录 ID（domainId）'), '42')
+    await user.click(screen.getByRole('combobox'))
+    await user.click(screen.getByRole('option', { name: '設定配信と検証' }))
+    await user.click(screen.getByRole('button', { name: '提交受控任务' }))
+    const dialog = screen.getByRole('alertdialog')
+    expect(dialog).toHaveTextContent('設定配信と検証')
+    expect(dialog).toHaveTextContent('実トラフィック・DNS・TLS')
+    expect(vendorWriteApi.createAccountJob).not.toHaveBeenCalled()
+    await user.click(within(dialog).getByRole('button', { name: 'Confirm', exact: true }))
+    await waitFor(() => expect(vendorWriteApi.createAccountJob).toHaveBeenCalledTimes(1))
+    const payload = vi.mocked(vendorWriteApi.createAccountJob).mock.calls[0][1]
+    expect(payload).toEqual({ action: 'deploy', domainId: '42', idempotencyKey: expect.any(String) })
+  })
+
   it('shows the external receipt without offering retries for uncertain cloud outcomes', async () => {
     vi.mocked(vendorWriteApi.listAccountJobs).mockResolvedValue({ ...emptyPage, list: [job({ status: 'needs_review', externalId: 'remote-receipt-17', errorCode: 'OUTCOME_UNKNOWN' })] })
     renderPanel()

@@ -13,8 +13,8 @@ export interface Domain {
 }
 export interface Pagination { page: number; pageSize: number; total: number }
 export interface DomainPage { list: Domain[]; pagination: Pagination }
-export interface InitialOrigin { address: string; port: number; weight: number; protocol: string; host?: string }
-export interface InitialOriginGroup { name: string; lbPolicy: 'round_robin' | 'weighted' | 'least_conn'; origins: InitialOrigin[] }
+export interface InitialOrigin { address: string; port: number; weight: number; protocol: string; host?: string; isBackup?: boolean }
+export interface InitialOriginGroup { name: string; lbPolicy: 'round_robin' | 'weighted' | 'least_conn' | 'primary_backup'; origins: InitialOrigin[] }
 export interface DomainPayload { domain: string; businessType?: string; remark?: string; tags?: string[]; originGroup?: InitialOriginGroup }
 export interface DomainConfig { defaultTtl?: number; originProtocol?: string; originHost?: string }
 export interface DomainCheck { expectedCname: string; observedCnames: string[]; matched: boolean; checkedAt: string }
@@ -50,7 +50,7 @@ export const domainApi = {
   sortCacheRules: (id: string, ruleIds: string[]) => request.put<{ success: boolean }>(`/user/domains/${id}/cache-rules/sort`, { ruleIds }),
   listOrigins: (id: string) => request.get<{ groups: OriginGroup[] }>(`/user/domains/${id}/origins`),
   createOriginGroup: (id: string, data: OriginGroupPayload) => request.post<OriginGroup>(`/user/domains/${id}/origins`, data),
-  updateOrigin: (id: string, originId: string, data: Partial<Origin>) => request.put<Origin>(`/user/domains/${id}/origins/${originId}`, data),
+  updateOrigin: (id: string, originId: string, data: Partial<Origin> & { isBackup?: boolean }) => request.put<Origin>(`/user/domains/${id}/origins/${originId}`, data),
   removeOrigin: (id: string, originId: string) => request.delete<{ id: string }>(`/user/domains/${id}/origins/${originId}`),
   deleteOriginGroup: (id: string, groupId: string) => request.delete<{ deleted: boolean }>(`/user/domains/${id}/origin-groups/${groupId}`),
   addOriginsToGroup: (id: string, groupId: string, origins: InitialOrigin[]) => request.post<unknown>(`/user/domains/${id}/origin-groups/${groupId}/origins`, { origins }),

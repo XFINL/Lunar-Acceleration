@@ -494,6 +494,9 @@ export default {
     test: 'Testen', sync: 'Abgleichen', connected: 'Verbindung erfolgreich', syncComplete: 'Schreibgeschützter Snapshot-Abgleich abgeschlossen', ignored: 'ignoriert', accountDetails: 'Details des ausgewählten Kontos', snapshots: 'Domain-Snapshots', logs: 'Protokolle', remoteStatusNote: 'Der Remote-Anbieterstatus ist nur eine Beobachtung. „pending“ oder „online“ bedeutet keine lokale Freigabe, Aktivierung oder Bereitstellung.', selectAccount: 'Konto auswählen, um Protokolle oder Snapshots anzuzeigen.', action: 'Aktion', result: 'Ergebnis', message: 'Meldung', success: 'Erfolgreich', failure: 'Fehlgeschlagen', noSnapshots: 'Noch keine Domain-Snapshots. Starten Sie einen schreibgeschützten Abgleich, um passende lokale Domains zu finden.', localDomain: 'Lokale Domain', remoteHostname: 'Remote-Hostname', cname: 'CNAME', providerStatus: 'Remote-Status (Beobachtung)', sslStatus: 'SSL-Status', syncedAt: 'Beobachtet am', observedOnly: 'nur beobachtet',
   vendorWrite: {
     "title": "Kontrollierte Cloud-Registrierung / -Löschung",
+    "deploymentTitle": "Verwaltete Ressourcen registrieren / bereitstellen / löschen",
+    "deploy": "Konfiguration bereitstellen und prüfen",
+    "deployNotice": "Die Bereitstellung betrifft nur verwaltete Ressourcen. Unterstützte Einstellungen werden nach dem Schreiben zurückgelesen und geprüft; nicht unterstützte werden abgelehnt. Ein erfolgreicher Abgleich bestätigt weder Live-Traffic noch DNS- oder TLS-Verbindungen und schaltet die Domain nicht automatisch live.",
     "account": "Konto:",
     "created": "Kontrollierter Schreibauftrag wurde eingereiht.",
     "retried": "Erneuter Versuch übermittelt.",

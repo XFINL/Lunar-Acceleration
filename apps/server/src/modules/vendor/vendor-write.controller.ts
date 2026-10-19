@@ -14,7 +14,7 @@ import { VendorWriteService } from './vendor-write.service'
 
 class WriteJobQuery extends PaginationQueryDto {}
 class CreateWriteJobDto {
-  @IsIn(['register', 'delete']) action!: 'register' | 'delete'
+  @IsIn(['register', 'deploy', 'delete']) action!: 'register' | 'deploy' | 'delete'
   @IsString() @Length(1, 20) domainId!: string
   @IsString() @Length(1, 64) idempotencyKey!: string
 }

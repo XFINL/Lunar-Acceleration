@@ -33,12 +33,31 @@ export interface VendorRegistrationInput {
   origin: { address: string; port: number; protocol: 'http' | 'https' }
 }
 
-/** M4 writes only register a domain and its single origin; they do not mean cache/TLS is deployed. */
+/** Narrow M4 deployment contract. Unsupported settings must fail before provider writes. */
+export interface VendorDeploymentConfig {
+  hostname: string
+  origin: { address: string; port: number; protocol: 'http' | 'https'; host?: string | null }
+  defaultTtl: number
+  tls: { enabled: boolean; certId: string | null; forceHttps: boolean; hstsEnabled: boolean; tlsVersion: string }
+  /** Supplied at execution only. Never serialize this value to a job or API response. */
+  certificate?: { certificatePem: string; privateKeyPem: string }
+}
+
+export interface VendorDeploymentResult {
+  verified: true
+  providerStatus: string
+  applied: Array<'origin' | 'cache' | 'certificate'>
+  verifiedAt: string
+}
+
+/** M4 can deploy only explicitly supported configuration, never implying unsupported settings. */
 export interface VendorDriver {
   testConnection(): Promise<VendorConnectionResult>
   listDomains(cursor?: string): Promise<VendorDomainPage>
   registerDomain?(input: VendorRegistrationInput): Promise<VendorDomain>
   deleteManagedDomain?(externalId: string, hostname: string): Promise<void>
+  deployManagedConfig?(externalId: string, config: VendorDeploymentConfig): Promise<void>
+  verifyManagedConfig?(externalId: string, config: VendorDeploymentConfig): Promise<VendorDeploymentResult>
 }
 
 export class VendorDriverError extends Error {

@@ -31,6 +31,7 @@ interface VendorForm { name: string; code: VendorCode; description: string; stat
 interface AccountForm { name: string; accessKey: string; secretKey: string; zoneId: string; status: number }
 const emptyVendor: VendorForm = { name: '', code: 'cloudflare', description: '', status: 1, sort: '0' }
 const emptyAccount: AccountForm = { name: '', accessKey: '', secretKey: '', zoneId: '', status: 1 }
+const emptyAccounts: VendorAccount[] = []
 
 export function VendorsPage() {
   const { t } = useTranslation()
@@ -52,7 +53,7 @@ export function VendorsPage() {
   const commonError = t('common.failed')
   const vendorsQuery = useQuery({ queryKey: ['admin', 'vendors', vendorPage], queryFn: () => vendorApi.listVendors({ page: vendorPage, pageSize: PAGE_SIZE }) })
   const accountsQuery = useQuery({ queryKey: ['admin', 'vendor-accounts', vendorPage, accountPage, vendorIdFilter], queryFn: () => vendorApi.listAccounts({ page: accountPage, pageSize: PAGE_SIZE, vendorId: vendorIdFilter || undefined }) })
-  const accounts = accountsQuery.data?.list ?? []
+  const accounts = accountsQuery.data?.list ?? emptyAccounts
   const selectedAccount = useMemo(() => accounts.find((item) => item.id === selectedAccountId) ?? null, [accounts, selectedAccountId])
   const accountVendor = (account: VendorAccount | null) => account?.vendor ?? vendorsQuery.data?.list.find((item) => item.id === account?.vendorId)
   useEffect(() => {
