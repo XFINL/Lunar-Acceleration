@@ -27,6 +27,7 @@ import { OriginsPage } from '@/pages/user/OriginsPage'
 import { CertificatesPage } from '@/pages/user/CertificatesPage'
 import { AdminDomainsPage } from '@/pages/admin/AdminDomainsPage'
 import { VendorsPage } from '@/pages/admin/VendorsPage'
+import { AdminNodesPage } from '@/pages/admin/AdminNodesPage'
 import { StatisticsPage } from '@/pages/user/StatisticsPage'
 import { AccessLogsPage } from '@/pages/user/AccessLogsPage'
 
@@ -89,6 +90,7 @@ export default function App() {
           <Route path="site-config" element={<SiteConfigPage />} />
           <Route path="system-config" element={<SystemConfigPage />} />
           <Route path="domains" element={<AdminDomainsPage />} />
+          <Route path="nodes" element={<AdminNodesPage />} />
           <Route path="vendors" element={<VendorsPage />} />
           <Route path="*" element={<ComingSoonPage />} />
         </Route>

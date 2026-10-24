@@ -12,7 +12,7 @@ import type { AppConfig } from './config/configuration'
 import { M5RealtimeGateway } from './modules/statistics/m5-realtime.gateway'
 
 async function bootstrap(): Promise<void> {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true })
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true, rawBody: true })
   const configService = app.get(ConfigService)
   const appConfig = configService.get<AppConfig>('app')!
 

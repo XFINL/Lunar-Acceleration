@@ -83,7 +83,7 @@ mysql_query 'DROP TABLE _prisma_created_at_probe'
 # Exercise the pre-existing-object compatibility path used by older deployments.
 mysql --defaults-extra-file="$MYSQL_CNF" "$DB_NAME" < "$SERVER_DIR/prisma/migrations/20261022000000_m4_vendor_write_jobs/migration.sql"
 
-EXPECTED_TABLES="vendors vendor_accounts vendor_resources vendor_sync_logs vendor_write_jobs origins domains traffic_stats_hourly traffic_status_hourly access_logs log_delivery_configs"
+EXPECTED_TABLES="vendors vendor_accounts vendor_resources vendor_sync_logs vendor_write_jobs origins domains traffic_stats_hourly traffic_status_hourly access_logs log_delivery_configs node_groups nodes node_tokens node_metrics node_request_nonces"
 for table in $EXPECTED_TABLES; do
   FOUND="$(mysql_query "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '$table'")"
   [[ "$FOUND" == "1" ]] || { echo "Missing expected table: $table" >&2; exit 1; }
@@ -118,4 +118,15 @@ LOG_BYTES_TYPE="$(mysql_query "SELECT column_type FROM information_schema.column
 STATUS_COUNTER_TYPE="$(mysql_query "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'traffic_status_hourly' AND column_name = 'requests'")"
 [[ "$STATUS_COUNTER_TYPE" == "decimal(40,0)" ]] || { echo "Unexpected status counter type: $STATUS_COUNTER_TYPE." >&2; exit 1; }
 
-echo "PASS: Prisma-generated created_at default; clean-database migrate deploy; vendor dependency order; managed_by_panel; created_at/updated_at defaults; write-job/traffic/log foreign keys; unsigned traffic and log counters; M5 status rollups and retention tables."
+for table in nodes node_tokens node_metrics node_request_nonces; do
+  NODE_FKS="$(mysql_query "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema = DATABASE() AND table_name = '$table'")"
+  [[ "$NODE_FKS" == "1" ]] || { echo "Expected one foreign key on $table; found $NODE_FKS." >&2; exit 1; }
+done
+NODE_BYTES_TYPE="$(mysql_query "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'node_metrics' AND column_name = 'bandwidth_in'")"
+[[ "$NODE_BYTES_TYPE" == "bigint unsigned" ]] || { echo "Unexpected node metric bandwidth type: $NODE_BYTES_TYPE." >&2; exit 1; }
+TOKEN_UNIQUE="$(mysql_query "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'node_tokens' AND column_name = 'node_id' AND non_unique = 0")"
+[[ "$TOKEN_UNIQUE" == "1" ]] || { echo "Expected a unique node token per node; found $TOKEN_UNIQUE." >&2; exit 1; }
+NONCE_UNIQUE="$(mysql_query "SELECT COUNT(*) FROM information_schema.statistics WHERE table_schema = DATABASE() AND table_name = 'node_request_nonces' AND index_name = 'node_request_nonces_node_id_nonce_key' AND non_unique = 0")"
+[[ "$NONCE_UNIQUE" == "2" ]] || { echo "Expected a composite unique node/nonce key; found $NONCE_UNIQUE columns." >&2; exit 1; }
+
+echo "PASS: Prisma-generated created_at default; clean-database migrate deploy; vendor dependency order; managed_by_panel; created_at/updated_at defaults; write-job/traffic/log/node foreign keys; unsigned traffic/log/node counters; M5 status rollups/retention; M6 node registry/token/metric/replay schema."

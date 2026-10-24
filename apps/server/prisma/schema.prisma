@@ -765,3 +765,85 @@ model VendorWriteJob {
   @@index([domainId])
   @@map("vendor_write_jobs")
 }
+
+// M6 第一安全切片：节点管理、一次性令牌、HMAC 心跳与指标上报。
+model NodeGroup {
+  id          BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  name        String   @db.VarChar(64)
+  description String?  @db.VarChar(255)
+  region      String?  @db.VarChar(64)
+  createdAt   DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  nodes       Node[]
+  @@map("node_groups")
+}
+
+model Node {
+  id             BigInt    @id @default(autoincrement()) @db.UnsignedBigInt
+  name           String    @db.VarChar(64)
+  ip             String    @db.VarChar(64)
+  port           Int       @default(443) @db.UnsignedInt
+  region         String?   @db.VarChar(64)
+  isp            String?   @db.VarChar(64)
+  nodeGroupId    BigInt?   @map("node_group_id") @db.UnsignedBigInt
+  /// 1在线 2离线 3维护 4部署中
+  status         Int       @default(2) @db.TinyInt
+  weight         Int       @default(1) @db.UnsignedInt
+  version        String?   @db.VarChar(32)
+  cpuCores       Int?      @map("cpu_cores") @db.UnsignedInt
+  memoryMb       Int?      @map("memory_mb") @db.UnsignedInt
+  diskGb         Int?      @map("disk_gb") @db.UnsignedInt
+  bandwidthMbps  Int?      @map("bandwidth_mbps") @db.UnsignedInt
+  lastHeartbeat  DateTime? @map("last_heartbeat") @db.DateTime
+  createdAt      DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt      DateTime  @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
+  group          NodeGroup? @relation(fields: [nodeGroupId], references: [id], onDelete: SetNull)
+  token          NodeToken?
+  metrics        NodeMetric[]
+  nonces         NodeRequestNonce[]
+  @@index([status])
+  @@index([region])
+  @@index([nodeGroupId])
+  @@map("nodes")
+}
+
+model NodeToken {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nodeId    BigInt   @unique @map("node_id") @db.UnsignedBigInt
+  /// SHA-256(raw token) hex; raw token material is never persisted.
+  tokenHash String   @map("token_hash") @db.Char(64)
+  status    Int      @default(1) @db.TinyInt
+  expireAt  DateTime? @map("expire_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  updatedAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
+  node      Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  @@map("node_tokens")
+}
+
+model NodeMetric {
+  id           BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nodeId       BigInt   @map("node_id") @db.UnsignedBigInt
+  statTime     DateTime @map("stat_time") @db.DateTime
+  cpuUsage     Decimal? @map("cpu_usage") @db.Decimal(5, 2)
+  memUsage     Decimal? @map("mem_usage") @db.Decimal(5, 2)
+  diskUsage    Decimal? @map("disk_usage") @db.Decimal(5, 2)
+  bandwidthIn  BigInt?  @map("bandwidth_in") @db.UnsignedBigInt
+  bandwidthOut BigInt?  @map("bandwidth_out") @db.UnsignedBigInt
+  connections  Int?     @db.UnsignedInt
+  qps          Int?     @db.UnsignedInt
+  cacheHitRate Decimal? @map("cache_hit_rate") @db.Decimal(5, 2)
+  node         Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  @@index([nodeId, statTime])
+  @@map("node_metrics")
+}
+
+model NodeRequestNonce {
+  id        BigInt   @id @default(autoincrement()) @db.UnsignedBigInt
+  nodeId    BigInt   @map("node_id") @db.UnsignedBigInt
+  nonce     String   @db.VarChar(128)
+  expiresAt DateTime @map("expires_at") @db.DateTime
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  node      Node     @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+  @@unique([nodeId, nonce])
+  @@index([expiresAt])
+  @@map("node_request_nonces")
+}
