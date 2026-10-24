@@ -83,7 +83,7 @@ mysql_query 'DROP TABLE _prisma_created_at_probe'
 # Exercise the pre-existing-object compatibility path used by older deployments.
 mysql --defaults-extra-file="$MYSQL_CNF" "$DB_NAME" < "$SERVER_DIR/prisma/migrations/20261022000000_m4_vendor_write_jobs/migration.sql"
 
-EXPECTED_TABLES="vendors vendor_accounts vendor_resources vendor_sync_logs vendor_write_jobs origins domains traffic_stats_hourly"
+EXPECTED_TABLES="vendors vendor_accounts vendor_resources vendor_sync_logs vendor_write_jobs origins domains traffic_stats_hourly traffic_status_hourly access_logs log_delivery_configs"
 for table in $EXPECTED_TABLES; do
   FOUND="$(mysql_query "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '$table'")"
   [[ "$FOUND" == "1" ]] || { echo "Missing expected table: $table" >&2; exit 1; }
@@ -107,4 +107,15 @@ TRAFFIC_FK_COUNT="$(mysql_query "SELECT COUNT(*) FROM information_schema.referen
 TRAFFIC_TYPE="$(mysql_query "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'traffic_stats_hourly' AND column_name = 'traffic'")"
 [[ "$TRAFFIC_TYPE" == "bigint unsigned" ]] || { echo "Unexpected traffic counter type: $TRAFFIC_TYPE." >&2; exit 1; }
 
-echo "PASS: Prisma-generated created_at default; clean-database migrate deploy; vendor dependency order; managed_by_panel; created_at/updated_at defaults; write-job and traffic foreign keys; unsigned traffic counters."
+for table in access_logs log_delivery_configs; do
+  CHILD_FKS="$(mysql_query "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema = DATABASE() AND table_name = '$table'")"
+  [[ "$CHILD_FKS" == "2" ]] || { echo "Expected 2 foreign keys on $table; found $CHILD_FKS." >&2; exit 1; }
+done
+STATUS_FKS="$(mysql_query "SELECT COUNT(*) FROM information_schema.referential_constraints WHERE constraint_schema = DATABASE() AND table_name = 'traffic_status_hourly'")"
+[[ "$STATUS_FKS" == "3" ]] || { echo "Expected 3 traffic_status_hourly foreign keys; found $STATUS_FKS." >&2; exit 1; }
+LOG_BYTES_TYPE="$(mysql_query "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'access_logs' AND column_name = 'bytes'")"
+[[ "$LOG_BYTES_TYPE" == "bigint unsigned" ]] || { echo "Unexpected access-log byte counter type: $LOG_BYTES_TYPE." >&2; exit 1; }
+STATUS_COUNTER_TYPE="$(mysql_query "SELECT column_type FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'traffic_status_hourly' AND column_name = 'requests'")"
+[[ "$STATUS_COUNTER_TYPE" == "decimal(40,0)" ]] || { echo "Unexpected status counter type: $STATUS_COUNTER_TYPE." >&2; exit 1; }
+
+echo "PASS: Prisma-generated created_at default; clean-database migrate deploy; vendor dependency order; managed_by_panel; created_at/updated_at defaults; write-job/traffic/log foreign keys; unsigned traffic and log counters; M5 status rollups and retention tables."

@@ -21,7 +21,7 @@ const GROUPS: NavGroup[] = [
       { to: '/purge', labelKey: 'nav.purge', comingSoon: true },
       { to: '/waf', labelKey: 'nav.waf', comingSoon: true },
       { to: '/statistics', labelKey: 'nav.statistics' },
-      { to: '/logs', labelKey: 'nav.logs', comingSoon: true },
+      { to: '/logs', labelKey: 'nav.logs' },
     ],
   },
   {

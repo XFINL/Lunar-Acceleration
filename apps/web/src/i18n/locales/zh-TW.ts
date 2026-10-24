@@ -488,12 +488,23 @@ export default {
     "roleChangeHint": "變更角色時會交換另一個源站的角色。"
   },
   statistics: {
-    title: '流量統計', description: '唯讀顯示已保存的每小時觀測資料。', permissionDenied: '你沒有 statistics:read 權限。',
+    title: '統計報表', description: '僅顯示實際觀測資料；不估算未採集指標。', permissionDenied: '你沒有 statistics:read 權限。',
     recentWindow: '最近 24 個已結束的 UTC 小時，不含目前小時。',
     domain: '網域', allDomains: '全部網域', coverage: '只顯示已觀測時段；缺少資料的時段不補 0。',
     loading: '正在載入流量統計…', total: '總流量', timeUtc: '時間（UTC）', bytes: '位元組',
     noData: '尚未收到採集資料。', noDataDescription: '沒有資料不代表流量為零。',
     noObservedIntervals: '此期間沒有已觀測時段。', retry: '重試', loadFailed: '無法載入流量統計。',
+    period: '時間粒度', hour: '小時', day: '日', week: '週', month: '月', startUtc: '開始時間（UTC ISO）', endUtc: '結束時間（UTC ISO，不含）',
+    applyRange: '套用 UTC 範圍', clearRange: '清除範圍', utcHint: '時間均為 UTC，結束時間不含；不會將缺少時段補成 0。',
+    rangeRequired: '請輸入 UTC 起訖時間。', invalidRange: '請輸入有效範圍，開始時間須早於結束時間。', utcOnly: '請使用結尾為 Z 的 UTC ISO 時間。', rangeAlignment: '請依所選 UTC 時間粒度對齊起訖時間。', exportCsv: '下載 CSV', exportDenied: '下載 CSV 需要 statistics:export 權限。',
+    bandwidth: '帶寬', requests: '請求數', hitRate: '快取命中率', httpStatus: 'HTTP 狀態分布', regions: '地區', isps: 'ISP', topUrls: '熱門 URL', topIps: '熱門 IP', trafficSeries: '各已觀測時段流量', dimension: '項目',
+  },
+  accessLogs: {
+    title: '存取日誌', description: '搜尋已記錄的 HTTP 存取事件。', permissionDenied: '你沒有 log:read 權限。', domain: '網域', allDomains: '全部網域',
+    startUtc: '開始時間（UTC ISO）', endUtc: '結束時間（UTC ISO）', status: 'HTTP 狀態', ip: 'IP 位址', url: 'URL', userAgent: 'User-Agent',
+    applyFilters: '套用篩選', clearFilters: '清除', refresh: '重新整理', exporting: '正在匯出…', exportCsv: '下載 CSV', exportDenied: '下載 CSV 需要 log:export 權限。',
+    realtimeTitle: '即時存取日誌', realtimeDescription: '按下開始後才接收即時事件。即時訂閱不支援 User-Agent 篩選。', startRealtime: '開始', stopRealtime: '停止', realtimeStopped: '已停止', realtimeConnecting: '連線中…', realtimeConnected: '已連線', realtimeErrorStatus: '連線錯誤', selectDomainFirst: '開始即時日誌前，請先選擇上方網域。', realtimeConnectFailed: '無法連線至即時日誌。請確認套餐包含即時日誌功能。', realtimeServerError: '即時訂閱失敗（{{code}}）。', realtimeClosed: '即時連線已中斷。請按開始重新連線。', noRealtimeLogs: '尚未收到即時事件。', bytes: '位元組', region: '地區', isp: 'ISP',
+    results: '存取事件', loading: '正在載入存取日誌…', loadFailed: '無法載入存取日誌。', retry: '重試', noResults: '沒有符合篩選條件的存取日誌。', exportFailed: '無法匯出存取日誌。', page: '頁次', previous: '上一頁', next: '下一頁', time: '時間（UTC）',
   },
   m4: {
     title: '廠商與帳號管理', description: '管理服務商定義及用於唯讀同步域名清單的憑證。', safetyTitle: '受控寫入階段', safetyNotice: '唯讀同步加上明確啟用的受控基礎註冊／刪除；不會自動上線。遠端 pending／online 狀態不代表域名已在此面板完整上線。',

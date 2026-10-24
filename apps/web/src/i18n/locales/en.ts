@@ -488,12 +488,23 @@ export default {
     "roleChangeHint": "Changing the role swaps the other origin."
   },
   statistics: {
-    title: 'Traffic statistics', description: 'Read-only traffic from persisted hourly observations.', permissionDenied: 'You do not have the statistics:read permission.',
+    title: 'Statistics', description: 'Observed statistics only; unavailable metrics are not estimated.', permissionDenied: 'You do not have the statistics:read permission.',
     recentWindow: 'Last 24 completed UTC hours; the current hour is excluded.',
     domain: 'Domain', allDomains: 'All domains', coverage: 'Only observed intervals are shown; missing intervals are not filled with zero.',
     loading: 'Loading traffic statistics…', total: 'Total traffic', timeUtc: 'Time (UTC)', bytes: 'Bytes',
     noData: 'No collection data has been received yet.', noDataDescription: 'No data is not the same as zero traffic.',
     noObservedIntervals: 'No observed intervals in this period.', retry: 'Retry', loadFailed: 'Could not load traffic statistics.',
+    period: 'Time granularity', hour: 'Hour', day: 'Day', week: 'Week', month: 'Month', startUtc: 'Start (UTC ISO)', endUtc: 'End (UTC ISO, exclusive)',
+    applyRange: 'Apply UTC range', clearRange: 'Clear range', utcHint: 'Times are UTC; end time is exclusive. Missing intervals are not filled with zero.',
+    rangeRequired: 'Enter both UTC start and end times.', invalidRange: 'Enter a valid UTC range with start before end.', utcOnly: 'Use ISO timestamps ending in Z for UTC.', rangeAlignment: 'Align the range to the selected UTC bucket boundary.', exportCsv: 'Download CSV', exportDenied: 'statistics:export permission is required to download CSV.',
+    bandwidth: 'Bandwidth', requests: 'Requests', hitRate: 'Cache hit rate', httpStatus: 'HTTP status distribution', regions: 'Regions', isps: 'ISPs', topUrls: 'Top URLs', topIps: 'Top IPs', trafficSeries: 'Traffic by observed interval', dimension: 'Value',
+  },
+  accessLogs: {
+    title: 'Access logs', description: 'Search recorded HTTP access events.', permissionDenied: 'You do not have the log:read permission.', domain: 'Domain', allDomains: 'All domains',
+    startUtc: 'Start (UTC ISO)', endUtc: 'End (UTC ISO)', status: 'HTTP status', ip: 'IP address', url: 'URL', userAgent: 'User agent',
+    applyFilters: 'Apply filters', clearFilters: 'Clear', refresh: 'Refresh', exporting: 'Exporting…', exportCsv: 'Download CSV', exportDenied: 'log:export permission is required to download CSV.',
+    realtimeTitle: 'Realtime access logs', realtimeDescription: 'Live events are received only after you start a connection. User-agent filtering is not available for realtime subscriptions.', startRealtime: 'Start', stopRealtime: 'Stop', realtimeStopped: 'Stopped', realtimeConnecting: 'Connecting…', realtimeConnected: 'Connected', realtimeErrorStatus: 'Connection error', selectDomainFirst: 'Select a domain above before starting realtime logs.', realtimeConnectFailed: 'Could not connect to realtime logs. Check that your package includes realtime logs.', realtimeServerError: 'Realtime subscription failed ({{code}}).', realtimeClosed: 'The realtime connection closed. Start it again to reconnect.', noRealtimeLogs: 'No realtime events received yet.', bytes: 'Bytes', region: 'Region', isp: 'ISP',
+    results: 'Access events', loading: 'Loading access logs…', loadFailed: 'Could not load access logs.', retry: 'Retry', noResults: 'No access logs match these filters.', exportFailed: 'Could not export access logs.', page: 'Page', previous: 'Previous', next: 'Next', time: 'Time (UTC)',
   },
   m4: {
     title: 'Vendor & account management', description: 'Manage provider definitions and credentials for read-only domain inventory synchronization.', safetyTitle: 'Controlled write milestone', safetyNotice: 'Read-only synchronization plus explicitly enabled controlled basic registration/deletion; nothing is automatically brought online. Remote pending/online status does not mean a domain is fully live in this panel.',

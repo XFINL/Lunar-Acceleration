@@ -113,6 +113,9 @@ importers:
       svg-captcha:
         specifier: ^1.4.0
         version: 1.4.0
+      ws:
+        specifier: ^8.22.0
+        version: 8.22.0
     devDependencies:
       '@nestjs/cli':
         specifier: ^10.4.9
@@ -144,6 +147,9 @@ importers:
       '@types/passport-jwt':
         specifier: ^4.0.1
         version: 4.0.1
+      '@types/ws':
+        specifier: ^8.18.2
+        version: 8.18.2
       prisma:
         specifier: ^5.22.0
         version: 5.22.0
@@ -1793,6 +1799,9 @@ packages:
 
   '@types/validator@13.15.10':
     resolution: {integrity: sha512-T8L6i7wCuyoK8A/ZeLYt1+q0ty3Zb9+qbSSvrIVitzT3YjZqkTZ40IbRsPanlB4h1QB3JVL1SYCdR6ngtFYcuA==}
+
+  '@types/ws@8.18.2':
+    resolution: {integrity: sha512-67MQl+fpWKVTT1NYdnmo3U4sc/xPo/zQBncVnI74qmQa0z/b+1g6iYqNmGCPbxO+zz2aklb08a0oHfegiVd0/w==}
 
   '@types/xml2js@0.4.14':
     resolution: {integrity: sha512-4YnrRemBShWRO2QjvUin8ESA41rH+9nQGLUGZV/1IDhi3SL9OhdpNC/MrulTWuptXKwhx/aDxE7toV0f/ypIXQ==}
@@ -6116,6 +6125,10 @@ snapshots:
       '@types/send': 0.17.6
 
   '@types/validator@13.15.10': {}
+
+  '@types/ws@8.18.2':
+    dependencies:
+      '@types/node': 20.19.43
 
   '@types/xml2js@0.4.14':
     dependencies:

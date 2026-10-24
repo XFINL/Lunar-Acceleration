@@ -2,6 +2,7 @@ import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/c
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
+import { ScheduleModule } from '@nestjs/schedule'
 import configuration, { type ThrottleConfig } from './config/configuration'
 import { AuditModule } from './modules/audit/audit.module'
 import { DomainModule } from './modules/domain/domain.module'
@@ -28,6 +29,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware'
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
