@@ -15,7 +15,7 @@ const GROUPS: NavGroup[] = [
     titleKey: 'nav.groupResources',
     items: [
       { to: '/admin/domains', labelKey: 'nav.domains' },
-      { to: '/admin/nodes', labelKey: 'nav.adminNodes', comingSoon: true },
+      { to: '/admin/nodes', labelKey: 'nav.adminNodes' },
       { to: '/admin/vendors', labelKey: 'nav.adminVendors' },
       { to: '/admin/schedule', labelKey: 'nav.adminSchedule', comingSoon: true },
       { to: '/admin/waf', labelKey: 'nav.waf', comingSoon: true },
