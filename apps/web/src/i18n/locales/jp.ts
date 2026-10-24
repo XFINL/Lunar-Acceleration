@@ -487,6 +487,25 @@ export default {
     "backupRoleHint": "未選択の場合はプライマリです。",
     "roleChangeHint": "役割を変更すると、もう一方のオリジンと役割が入れ替わります。"
   },
+  statistics: {
+    title: '統計レポート', description: '実際に観測されたデータのみを表示し、未収集の指標は推定しません。', permissionDenied: 'statistics:read 権限がありません。',
+    recentWindow: '直近の完了済み 24 時間（UTC）。現在の時間帯は含みません。',
+    domain: 'ドメイン', allDomains: 'すべてのドメイン', coverage: '観測済みの時間帯のみを表示します。データがない時間帯を 0 で補完しません。',
+    loading: 'トラフィック統計を読み込み中…', total: '合計トラフィック', timeUtc: '時刻（UTC）', bytes: 'バイト',
+    noData: '収集データはまだ受信していません。', noDataDescription: 'データがないことは、トラフィックがゼロであることを意味しません。',
+    noObservedIntervals: 'この期間に観測された時間帯はありません。', retry: '再試行', loadFailed: 'トラフィック統計を読み込めませんでした。',
+    period: '時間粒度', hour: '時間', day: '日', week: '週', month: '月', startUtc: '開始（UTC ISO）', endUtc: '終了（UTC ISO・範囲外）',
+    applyRange: 'UTC 範囲を適用', clearRange: '範囲をクリア', utcHint: '時刻は UTC、終了時刻は範囲に含みません。未観測区間を 0 で補いません。',
+    rangeRequired: 'UTC の開始・終了時刻を入力してください。', invalidRange: '開始が終了より前になる有効な UTC 範囲を入力してください。', utcOnly: '末尾が Z の UTC ISO 時刻を入力してください。', rangeAlignment: '選択した UTC 粒度に範囲を合わせてください。', exportCsv: 'CSV をダウンロード', exportDenied: 'CSV のダウンロードには statistics:export 権限が必要です。',
+    bandwidth: '帯域幅', requests: 'リクエスト数', hitRate: 'キャッシュヒット率', httpStatus: 'HTTP ステータス分布', regions: '地域', isps: 'ISP', topUrls: '上位 URL', topIps: '上位 IP', trafficSeries: '観測区間ごとの通信量', dimension: '項目',
+  },
+  accessLogs: {
+    title: 'アクセスログ', description: '記録された HTTP アクセスイベントを検索します。', permissionDenied: 'log:read 権限がありません。', domain: 'ドメイン', allDomains: 'すべてのドメイン',
+    startUtc: '開始（UTC ISO）', endUtc: '終了（UTC ISO）', status: 'HTTP ステータス', ip: 'IP アドレス', url: 'URL', userAgent: 'ユーザーエージェント',
+    applyFilters: '絞り込みを適用', clearFilters: 'クリア', refresh: '更新', exporting: 'エクスポート中…', exportCsv: 'CSV をダウンロード', exportDenied: 'CSV のダウンロードには log:export 権限が必要です。',
+    realtimeTitle: 'リアルタイムアクセスログ', realtimeDescription: '接続を開始した後にリアルタイムイベントを受信します。リアルタイム購読ではユーザーエージェントで絞り込めません。', startRealtime: '開始', stopRealtime: '停止', realtimeStopped: '停止中', realtimeConnecting: '接続中…', realtimeConnected: '接続済み', realtimeErrorStatus: '接続エラー', selectDomainFirst: 'リアルタイムログを開始する前に、上でドメインを選択してください。', realtimeConnectFailed: 'リアルタイムログに接続できません。プランにリアルタイムログ機能があることを確認してください。', realtimeServerError: 'リアルタイム購読に失敗しました（{{code}}）。', realtimeClosed: 'リアルタイム接続が切断されました。再接続するには開始を押してください。', noRealtimeLogs: 'リアルタイムイベントはまだありません。', bytes: 'バイト', region: '地域', isp: 'ISP',
+    results: 'アクセスイベント', loading: 'アクセスログを読み込み中…', loadFailed: 'アクセスログを読み込めませんでした。', retry: '再試行', noResults: '条件に一致するアクセスログはありません。', exportFailed: 'アクセスログをエクスポートできませんでした。', page: 'ページ', previous: '前へ', next: '次へ', time: '日時（UTC）',
+  },
   m4: {
     title: 'ベンダー・アカウント管理', description: 'ベンダー定義と読み取り専用ドメイン一覧同期用の認証情報を管理します。', safetyTitle: '制御付き書き込みの段階', safetyNotice: '読み取り専用同期に加え、明示的に有効化された制御付きの基本登録／削除を行います。自動で公開・稼働状態にはしません。リモートの pending/online は、このパネルでドメイン設定が完全に稼働中であることを意味しません。',
     providers: 'ベンダー', providerName: 'ベンダー名', driver: 'ドライバー', descriptionField: '説明', sort: '並び順', addVendor: 'ベンダーを追加', editProvider: 'ベンダーを編集', providerCode: 'ベンダーコード', codeImmutable: '作成後にベンダーコードは変更できません。', deleteVendorConfirm: 'このベンダーを削除しますか？アカウントまたはプランから参照されている場合、サーバーが拒否することがあります。',

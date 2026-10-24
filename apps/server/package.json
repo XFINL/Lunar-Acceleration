@@ -49,7 +49,8 @@
     "passport-jwt": "^4.0.1",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "svg-captcha": "^1.4.0"
+    "svg-captcha": "^1.4.0",
+    "ws": "^8.22.0"
   },
   "devDependencies": {
     "@nestjs/cli": "^10.4.9",
@@ -62,6 +63,7 @@
     "@types/node": "^20.17.10",
     "@types/nodemailer": "^8.0.2",
     "@types/passport-jwt": "^4.0.1",
+    "@types/ws": "^8.18.2",
     "prisma": "^5.22.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",

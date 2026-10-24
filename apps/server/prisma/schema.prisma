@@ -50,6 +50,10 @@ model User {
   transactions Transaction[]
   domains      Domain[]
   certificates Certificate[]
+  trafficStatsHourly TrafficStatHourly[]
+  accessLogs AccessLog[]
+  logDeliveryConfigs LogDeliveryConfig[]
+  trafficStatusHourly TrafficStatusHourly[]
 
   @@index([status])
   @@index([packageId])
@@ -446,12 +450,94 @@ model Domain {
   originGroups OriginGroup[]
   vendorResources VendorResource[]
   vendorWriteJobs VendorWriteJob[]
+  trafficStatsHourly TrafficStatHourly[]
+  accessLogs AccessLog[]
+  logDeliveryConfig LogDeliveryConfig?
+  trafficStatusHourly TrafficStatusHourly[]
 
   @@index([userId])
   @@index([status])
   @@index([auditStatus])
   @@index([createdAt])
   @@map("domains")
+}
+
+/// 已觀測到的逐小時流量快照；日統計由此表聚合。
+model TrafficStatHourly {
+  userId    BigInt   @map("user_id") @db.UnsignedBigInt
+  domainId  BigInt   @map("domain_id") @db.UnsignedBigInt
+  statTime  DateTime @map("stat_time") @db.DateTime(0)
+  source    String   @db.VarChar(16)
+  traffic   BigInt   @db.UnsignedBigInt
+  requests Decimal @default(0) @db.Decimal(40, 0)
+  bandwidthPeak Decimal @default(0) @map("bandwidth_peak") @db.Decimal(40, 0)
+  cacheHit Decimal @default(0) @map("cache_hit") @db.Decimal(40, 0)
+  cacheMiss Decimal @default(0) @map("cache_miss") @db.Decimal(40, 0)
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  statusCodes TrafficStatusHourly[]
+
+  @@unique([domainId, source, statTime])
+  @@index([userId, statTime])
+  @@index([domainId, statTime])
+  @@map("traffic_stats_hourly")
+}
+
+
+/// Per-hour status-code counters are stored separately for efficient reports.
+model TrafficStatusHourly {
+  userId BigInt @map("user_id") @db.UnsignedBigInt
+  domainId BigInt @map("domain_id") @db.UnsignedBigInt
+  statTime DateTime @map("stat_time") @db.DateTime(0)
+  source String @db.VarChar(16)
+  statusCode Int @map("status_code") @db.UnsignedSmallInt
+  requests Decimal @default(0) @db.Decimal(40, 0)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  hourly TrafficStatHourly @relation(fields: [domainId, source, statTime], references: [domainId, source, statTime], onDelete: Cascade)
+  @@id([domainId, source, statTime, statusCode])
+  @@index([userId, statTime, statusCode])
+  @@map("traffic_status_hourly")
+}
+
+/// Raw access logs are retained for at most 30 days; every read checks expiresAt.
+model AccessLog {
+  id BigInt @id @default(autoincrement()) @db.UnsignedBigInt
+  userId BigInt @map("user_id") @db.UnsignedBigInt
+  domainId BigInt @map("domain_id") @db.UnsignedBigInt
+  eventTime DateTime @map("event_time") @db.DateTime(0)
+  ip String @db.VarChar(45)
+  url String @db.VarChar(2048)
+  statusCode Int @map("status_code") @db.UnsignedSmallInt
+  bytes BigInt @default(0) @db.UnsignedBigInt
+  userAgent String? @map("user_agent") @db.VarChar(512)
+  region String? @db.VarChar(96)
+  isp String? @db.VarChar(96)
+  source String @db.VarChar(16)
+  createdAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @map("created_at") @db.DateTime
+  expiresAt DateTime @map("expires_at") @db.DateTime
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  @@index([domainId, eventTime, id])
+  @@index([userId, eventTime, id])
+  @@index([expiresAt])
+  @@index([domainId, statusCode, eventTime])
+  @@map("access_logs")
+}
+
+/// Safe presentation preferences only; webhook delivery is unsupported in this phase.
+model LogDeliveryConfig {
+  domainId BigInt @id @map("domain_id") @db.UnsignedBigInt
+  userId BigInt @map("user_id") @db.UnsignedBigInt
+  enabled Boolean @default(false)
+  retentionDays Int @default(30) @map("retention_days") @db.UnsignedTinyInt
+  updatedAt DateTime @default(dbgenerated("CURRENT_TIMESTAMP")) @updatedAt @map("updated_at") @db.DateTime
+  domain Domain @relation(fields: [domainId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  @@index([userId])
+  @@map("log_delivery_configs")
 }
 
 model DomainConfig {

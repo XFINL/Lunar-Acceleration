@@ -45,6 +45,7 @@ export interface AllConfig {
   throttle: ThrottleConfig
   security: SecurityConfig
   log: LogConfig
+  nodeReportToken: string
 }
 
 const toInt = (value: string | undefined, fallback: number): number => {
@@ -90,4 +91,6 @@ export default (): AllConfig => ({
   log: {
     level: process.env.LOG_LEVEL ?? 'info',
   },
+  // Empty disables node reporting.
+  nodeReportToken: process.env.NODE_REPORT_TOKEN ?? '',
 })

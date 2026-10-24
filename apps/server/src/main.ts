@@ -9,6 +9,7 @@ import helmet from 'helmet'
 import { join } from 'node:path'
 import { AppModule } from './app.module'
 import type { AppConfig } from './config/configuration'
+import { M5RealtimeGateway } from './modules/statistics/m5-realtime.gateway'
 
 async function bootstrap(): Promise<void> {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { bufferLogs: true })
@@ -44,6 +45,7 @@ async function bootstrap(): Promise<void> {
   SwaggerModule.setup('api/docs', app, document)
 
   await app.listen(appConfig.port, '0.0.0.0')
+  app.get(M5RealtimeGateway).attach(app.getHttpServer())
 
   const logger = new Logger('Bootstrap')
   logger.log(`服务已启动: ${appConfig.appUrl} (env=${appConfig.env})`)

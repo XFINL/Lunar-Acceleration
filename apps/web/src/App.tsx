@@ -27,13 +27,13 @@ import { OriginsPage } from '@/pages/user/OriginsPage'
 import { CertificatesPage } from '@/pages/user/CertificatesPage'
 import { AdminDomainsPage } from '@/pages/admin/AdminDomainsPage'
 import { VendorsPage } from '@/pages/admin/VendorsPage'
+import { StatisticsPage } from '@/pages/user/StatisticsPage'
+import { AccessLogsPage } from '@/pages/user/AccessLogsPage'
 
 /** 用户端尚未实现的模块（侧边栏标为 comingSoon），统一落到占位页 */
 const USER_COMING_SOON = [
   'purge',
   'waf',
-  'statistics',
-  'logs',
   'tickets',
   'notices',
 ]
@@ -65,6 +65,8 @@ export default function App() {
           <Route path="cache" element={<CachePage />} />
           <Route path="origin" element={<OriginsPage />} />
           <Route path="certificates" element={<CertificatesPage />} />
+          <Route path="statistics" element={<StatisticsPage />} />
+          <Route path="logs" element={<AccessLogsPage />} />
           {USER_COMING_SOON.map((path) => (
             <Route key={path} path={path} element={<ComingSoonPage />} />
           ))}

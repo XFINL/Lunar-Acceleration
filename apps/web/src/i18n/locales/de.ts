@@ -487,6 +487,25 @@ export default {
     "backupRoleHint": "Nicht ausgewählt bedeutet primärer Origin.",
     "roleChangeHint": "Beim Ändern der Rolle wird die Rolle des anderen Origins getauscht."
   },
+  statistics: {
+    title: 'Statistiken', description: 'Nur tatsächlich beobachtete Daten; nicht erfasste Kennzahlen werden nicht geschätzt.', permissionDenied: 'Die Berechtigung statistics:read fehlt.',
+    recentWindow: 'Die letzten 24 abgeschlossenen UTC-Stunden, ohne die aktuelle Stunde.',
+    domain: 'Domain', allDomains: 'Alle Domains', coverage: 'Es werden nur beobachtete Intervalle angezeigt; fehlende Daten werden nicht mit 0 aufgefüllt.',
+    loading: 'Traffic-Statistiken werden geladen…', total: 'Gesamter Traffic', timeUtc: 'Zeit (UTC)', bytes: 'Bytes',
+    noData: 'Es wurden noch keine Messdaten empfangen.', noDataDescription: 'Keine Daten bedeuten nicht, dass der Traffic null ist.',
+    noObservedIntervals: 'In diesem Zeitraum gibt es keine beobachteten Intervalle.', retry: 'Erneut versuchen', loadFailed: 'Traffic-Statistiken konnten nicht geladen werden.',
+    period: 'Zeitgranularität', hour: 'Stunde', day: 'Tag', week: 'Woche', month: 'Monat', startUtc: 'Start (UTC ISO)', endUtc: 'Ende (UTC ISO, exklusiv)',
+    applyRange: 'UTC-Zeitraum anwenden', clearRange: 'Zeitraum löschen', utcHint: 'Zeiten in UTC; Endzeit exklusiv. Fehlende Intervalle werden nicht mit 0 aufgefüllt.',
+    rangeRequired: 'Start- und Endzeit in UTC eingeben.', invalidRange: 'Einen gültigen UTC-Zeitraum mit Start vor Ende eingeben.', utcOnly: 'UTC-ISO-Zeitstempel mit abschließendem Z verwenden.', rangeAlignment: 'Den Zeitraum an der ausgewählten UTC-Granularität ausrichten.', exportCsv: 'CSV herunterladen', exportDenied: 'Zum CSV-Download ist die Berechtigung statistics:export erforderlich.',
+    bandwidth: 'Bandbreite', requests: 'Anfragen', hitRate: 'Cache-Trefferrate', httpStatus: 'HTTP-Statusverteilung', regions: 'Regionen', isps: 'ISPs', topUrls: 'Top-URLs', topIps: 'Top-IP-Adressen', trafficSeries: 'Traffic je beobachtetem Intervall', dimension: 'Wert',
+  },
+  accessLogs: {
+    title: 'Zugriffsprotokolle', description: 'Aufgezeichnete HTTP-Zugriffsereignisse durchsuchen.', permissionDenied: 'Die Berechtigung log:read fehlt.', domain: 'Domain', allDomains: 'Alle Domains',
+    startUtc: 'Start (UTC ISO)', endUtc: 'Ende (UTC ISO)', status: 'HTTP-Status', ip: 'IP-Adresse', url: 'URL', userAgent: 'User-Agent',
+    applyFilters: 'Filter anwenden', clearFilters: 'Leeren', refresh: 'Aktualisieren', exporting: 'Export läuft…', exportCsv: 'CSV herunterladen', exportDenied: 'Zum CSV-Download ist die Berechtigung log:export erforderlich.',
+    realtimeTitle: 'Echtzeit-Zugriffsprotokolle', realtimeDescription: 'Live-Ereignisse werden erst nach dem Start einer Verbindung empfangen. Echtzeit-Abos unterstützen keinen User-Agent-Filter.', startRealtime: 'Starten', stopRealtime: 'Stoppen', realtimeStopped: 'Gestoppt', realtimeConnecting: 'Verbindung wird hergestellt…', realtimeConnected: 'Verbunden', realtimeErrorStatus: 'Verbindungsfehler', selectDomainFirst: 'Wählen Sie oben eine Domain aus, bevor Sie Echtzeitprotokolle starten.', realtimeConnectFailed: 'Verbindung zu Echtzeitprotokollen fehlgeschlagen. Prüfen Sie, ob Ihr Paket Echtzeitprotokolle enthält.', realtimeServerError: 'Echtzeit-Abo fehlgeschlagen ({{code}}).', realtimeClosed: 'Die Echtzeitverbindung wurde geschlossen. Starten Sie sie erneut, um wieder zu verbinden.', noRealtimeLogs: 'Noch keine Echtzeitereignisse empfangen.', bytes: 'Bytes', region: 'Region', isp: 'ISP',
+    results: 'Zugriffsereignisse', loading: 'Zugriffsprotokolle werden geladen…', loadFailed: 'Zugriffsprotokolle konnten nicht geladen werden.', retry: 'Erneut versuchen', noResults: 'Keine Zugriffsprotokolle entsprechen den Filtern.', exportFailed: 'Zugriffsprotokolle konnten nicht exportiert werden.', page: 'Seite', previous: 'Zurück', next: 'Weiter', time: 'Zeit (UTC)',
+  },
   m4: {
     title: 'Anbieter- und Kontoverwaltung', description: 'Anbieterdefinitionen und Zugangsdaten für den schreibgeschützten Abgleich des Domainbestands verwalten.', safetyTitle: 'Meilenstein für kontrollierte Schreibvorgänge', safetyNotice: 'Schreibgeschützter Abgleich plus ausdrücklich aktivierte kontrollierte grundlegende Registrierung/Löschung; nichts wird automatisch live geschaltet. Remote-Status „pending/online“ bedeutet nicht, dass eine Domain in diesem Panel vollständig live ist.',
     providers: 'Anbieter', providerName: 'Anbietername', driver: 'Treiber', descriptionField: 'Beschreibung', sort: 'Sortierung', addVendor: 'Anbieter hinzufügen', editProvider: 'Anbieter bearbeiten', providerCode: 'Anbietercode', codeImmutable: 'Der Anbietercode kann nach der Erstellung nicht geändert werden.', deleteVendorConfirm: 'Diesen Anbieter löschen? Der Server kann ablehnen, wenn ein Konto oder Paket darauf verweist.',

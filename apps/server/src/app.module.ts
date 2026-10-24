@@ -2,12 +2,14 @@ import { MiddlewareConsumer, Module, NestModule, RequestMethod } from '@nestjs/c
 import { ConfigModule, ConfigService } from '@nestjs/config'
 import { APP_FILTER, APP_GUARD, APP_INTERCEPTOR } from '@nestjs/core'
 import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler'
+import { ScheduleModule } from '@nestjs/schedule'
 import configuration, { type ThrottleConfig } from './config/configuration'
 import { AuditModule } from './modules/audit/audit.module'
 import { DomainModule } from './modules/domain/domain.module'
 import { DomainConfigModule } from './modules/domain/domain-config.module'
 import { CertificateModule } from './modules/certificate/certificate.module'
 import { VendorModule } from './modules/vendor/vendor.module'
+import { StatisticsModule } from './modules/statistics/statistics.module'
 import { DomainResourceModule } from './modules/domain-resource/domain-resource.module'
 import { AuthModule } from './modules/auth/auth.module'
 import { OrderModule } from './modules/order/order.module'
@@ -27,6 +29,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware'
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     ConfigModule.forRoot({
       isGlobal: true,
       load: [configuration],
@@ -59,6 +62,7 @@ import { RequestIdMiddleware } from './common/middleware/request-id.middleware'
     DomainResourceModule,
     CertificateModule,
     VendorModule,
+    StatisticsModule,
   ],
   providers: [
     // 限流 -> 认证
